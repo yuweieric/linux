@@ -214,6 +214,13 @@
 		clock-frequency = <1200000>;
 	};
 
+	reboot {
+		compatible = "syscon-reboot";
+		regmap = <&ao_ctrl>;
+		offset = <0x10>;
+		mask = <0x48698284>;
+	};
+
 	smb {
 		compatible = "simple-bus";
 		#address-cells = <2>;
