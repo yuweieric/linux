@@ -4,7 +4,9 @@
  * Copyright (C) 2015, Hisilicon Ltd.
  */
 
+#include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/hi6220-clock.h>
+#include <dt-bindings/thermal/thermal.h>
 
 / {
 	psci {
@@ -21,7 +23,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x0>;
 			enable-method = "psci";
-			clocks = <&clock_stub HISI_STUB_ACPU0>;
+			clocks = <&stub_clock 0>;
 			clock-latency = <0>;
 			operating-points = <
 				/* kHz */
@@ -32,6 +34,7 @@
 				208000   0
 			>;
 			#cooling-cells = <2>; /* min followed by max */
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu1: cpu@1 {
@@ -39,6 +42,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x1>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu2: cpu@2 {
@@ -46,6 +50,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x2>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu3: cpu@3 {
@@ -53,6 +58,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x3>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu4: cpu@4 {
@@ -60,6 +66,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x100>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu5: cpu@5 {
@@ -67,6 +74,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x101>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu6: cpu@6 {
@@ -74,6 +82,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x102>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu7: cpu@7 {
@@ -81,6 +90,7 @@
 			device_type = "cpu";
 			reg = <0x0 0x103>;
 			enable-method = "psci";
+			cpu-idle-states = <&CPU_SLEEP_0_0 &CLUSTER_SLEEP_0>;
 		};
 
 		cpu-map {
@@ -111,6 +121,29 @@
 				core3 {
 					cpu = <&cpu7>;
 				};
+			};
+		};
+
+		idle-states {
+			entry-method = "arm,psci";
+
+			CPU_SLEEP_0_0: cpu-sleep-0-0 {
+				compatible = "arm,idle-state";
+				local-timer-stop;
+				arm,psci-suspend-param = <0x0010000>;
+				entry-latency-us = <250>;
+				exit-latency-us = <500>;
+				min-residency-us = <950>;
+			};
+
+			CLUSTER_SLEEP_0: cluster-sleep-0 {
+				compatible = "arm,idle-state";
+				local-timer-stop;
+				arm,psci-suspend-param = <0x1010000>;
+				entry-latency-us = <600>;
+				exit-latency-us = <1100>;
+				min-residency-us = <2700>;
+				wakeup-latency-us = <1500>;
 			};
 		};
 	};
@@ -144,9 +177,9 @@
 		interrupt-parent = <&gic>;
 		ranges;
 
-		sram: sram {
-			compatible = "hisilicon,sram", "syscon";
-			reg = <0x0 0xFFF80000 0x0 0x12000>;
+		sram: sram@fff80000 {
+			compatible = "hisilicon,hi6220-sramctrl", "syscon";
+			reg = <0x0 0xfff80000 0x0 0x12000>;
 		};
 
 		ipc_s: ipc_s {
@@ -210,11 +243,20 @@
 			};
 		};
 
-		clock_stub: clock_stub {
-			compatible = "hisilicon,hisi-clock-stub";
-			hisilicon,clk-stub-sram = <&sram>;
-			hisilicon,clk-stub-mc = <&ipc_s>;
+		stub_clock: stub_clock {
+			compatible = "hisilicon,hi6220-stub-clk";
+			hisilicon,hi6220-clk-sram = <&sram>;
 			#clock-cells = <1>;
+			mboxes = <&mailbox 1>;
+		};
+
+		dual_timer0: dual_timer@f8008000 {
+			compatible = "arm,sp804", "arm,primecell";
+			reg = <0x0 0xf8008000 0x0 0x1000>;
+			interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clock_ao 31>, <&clock_ao 31>;
+			clock-names = "apb_pclk", "apb_pclk";
 		};
 
 		uart0: uart@f8015000 {	/* console */
@@ -223,6 +265,14 @@
 			interrupts = <0 36 4>;
 			clocks = <&clock_ao HI6220_UART0_PCLK>, <&clock_ao HI6220_UART0_PCLK>;
 			clock-names = "uartclk", "apb_pclk";
+		};
+
+		mailbox: mailbox {
+			#mbox-cells = <1>;
+			compatible = "hisilicon,hi6220-mbox";
+			reg = <0x0 0xf7510000 0x0 0x1000>, /* IPC_S */
+			      <0x0 0x06dff800 0x0 0x0800>; /* Mailbox buffer */
+			interrupts = <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>;
 		};
 	};
 };

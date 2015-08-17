@@ -19,6 +19,7 @@ config ARM64
 	select ARM_GIC_V2M if PCI_MSI
 	select ARM_GIC_V3
 	select ARM_GIC_V3_ITS if PCI_MSI
+	select ARM_PSCI_FW
 	select BUILDTIME_EXTABLE_SORT
 	select CLONE_BACKWARDS
 	select COMMON_CLK
@@ -265,6 +266,7 @@ config ARCH_HISI
 	select HI6220_SYSCFG
 	select MFD_HI655X_PMIC
 	select REGULATOR_HI655X
+	select ARM_TIMER_SP804
 	help
 	  This enables support for Hisilicon ARMv8 Family of SoCs.
 

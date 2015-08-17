@@ -46,6 +46,7 @@
 #include <linux/of_platform.h>
 #include <linux/efi.h>
 #include <linux/personality.h>
+#include <linux/psci.h>
 
 #include <asm/acpi.h>
 #include <asm/fixmap.h>
@@ -61,7 +62,6 @@
 #include <asm/tlbflush.h>
 #include <asm/traps.h>
 #include <asm/memblock.h>
-#include <asm/psci.h>
 #include <asm/efi.h>
 #include <asm/virt.h>
 
@@ -408,16 +408,13 @@ void __init setup_arch(char **cmdline_p)
 	if (acpi_disabled) {
 		unflatten_device_tree();
 		psci_dt_init();
-		cpu_read_bootcpu_ops();
-#ifdef CONFIG_SMP
-		of_smp_init_cpus();
-#endif
 	} else {
 		psci_acpi_init();
-		acpi_init_cpus();
 	}
 
+	cpu_read_bootcpu_ops();
 #ifdef CONFIG_SMP
+	smp_init_cpus();
 	smp_build_mpidr_hash();
 #endif
 

@@ -7,13 +7,11 @@
 
 /dts-v1/;
 
-/memreserve/ 0x0740f000 0x1000;
-
 #include "hi6220.dtsi"
 
 / {
 	model = "HiKey Development Board";
-	compatible = "hisilicon,hi6220-hikey";
+	compatible = "hisilicon,hi6220-hikey", "hisilicon,hi6220";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&gic>;
@@ -27,5 +25,22 @@
 	memory@7400000 {
 		device_type = "memory";
 		reg = <0x0 0x07400000 0x0 0x38c00000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		mcu-buf@05e00000 {
+			no-map;
+			reg = <0x0 0x0740f000 0x0 0x00001000>,	/* MCU firmware section */
+			      <0x0 0x05e00000 0x0 0x00100000>;	/* MCU firmware buffer */
+		};
+
+		mbox-buf@06dff000 {
+			no-map;
+			reg = <0x0 0x06dff000 0x0 0x00001000>;	/* Mailbox message buf */
+		};
 	};
 };
