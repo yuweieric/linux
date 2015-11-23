@@ -28,6 +28,7 @@
 		mshc0 = &dwmmc_0;
 		mshc1 = &dwmmc_1;
 		mshc2 = &dwmmc_2;
+		spi0 = &spi_0;
 	};
 
 	chosen {
@@ -224,6 +225,12 @@
                         heap-name = "sys_contig";
                         heap-range = <0x0 0x0>;
                         heap-type = "ion_system_contig";
+                };
+
+                heap_cma@0 {
+                        heap-name = "cma";
+                        heap-range = <0x0 0x0>;
+                        heap-type = "ion_cma";
                 };
         };
 };
