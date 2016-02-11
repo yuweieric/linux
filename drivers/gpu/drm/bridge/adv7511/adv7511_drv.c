@@ -1037,6 +1037,8 @@ static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		goto err_unregister_cec;
 	}
 
+	adv7511_audio_init(dev);
+
 	return 0;
 
 err_unregister_cec:
@@ -1057,6 +1059,8 @@ static int adv7511_remove(struct i2c_client *i2c)
 	}
 
 	drm_bridge_remove(&adv7511->bridge);
+
+	adv7511_audio_exit(&i2c->dev);
 
 	i2c_unregister_device(adv7511->i2c_edid);
 
