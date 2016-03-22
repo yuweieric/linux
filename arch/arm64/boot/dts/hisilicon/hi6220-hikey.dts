@@ -395,6 +395,23 @@
 			};
 		};
 	};
+
+	sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "hikey-hdmi";
+		simple-audio-card,format = "i2s";
+
+		simple-audio-card,bitclock-master = <&sound_master>;
+		simple-audio-card,frame-master = <&sound_master>;
+
+		sound_master: simple-audio-card,cpu {
+			sound-dai = <&i2s0>;
+		};
+
+		simple-audio-card,codec {
+			sound-dai = <&adv7533>;
+		};
+	};
 };
 
 &uart2 {
@@ -467,6 +484,7 @@
 		pd-gpio = <&gpio0 4 0>;
 		adi,dsi-lanes = <4>;
 		adi,disable-timing-generator;
+		#sound-dai-cells = <0>;
 
 		port {
 			adv7533_in: endpoint {
