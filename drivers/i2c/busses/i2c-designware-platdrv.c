@@ -136,18 +136,6 @@ static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
 }
 #endif
 
-static int i2c_dw_plat_prepare_clk(struct dw_i2c_dev *i_dev, bool prepare)
-{
-	if (IS_ERR(i_dev->clk))
-		return PTR_ERR(i_dev->clk);
-
-	if (prepare)
-		return clk_prepare_enable(i_dev->clk);
-
-	clk_disable_unprepare(i_dev->clk);
-	return 0;
-}
-
 static int dw_i2c_plat_probe(struct platform_device *pdev)
 {
 	struct dw_i2c_platform_data *pdata = dev_get_platdata(&pdev->dev);
@@ -220,7 +208,11 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 			DW_IC_CON_RESTART_EN | DW_IC_CON_SPEED_FAST;
 
 	dev->clk = devm_clk_get(&pdev->dev, NULL);
-	if (!i2c_dw_plat_prepare_clk(dev, true)) {
+	if (!IS_ERR(dev->clk)) {
+		r = clk_prepare_enable(dev->clk);
+		if (r)
+			return r;
+
 		dev->get_clk_rate_khz = i2c_dw_get_clk_rate_khz;
 
 		if (!dev->sda_hold_time && ht)
@@ -243,18 +235,26 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	ACPI_COMPANION_SET(&adap->dev, ACPI_COMPANION(&pdev->dev));
 	adap->dev.of_node = pdev->dev.of_node;
 
-	if (dev->pm_runtime_disabled) {
-		pm_runtime_forbid(&pdev->dev);
-	} else {
-		pm_runtime_set_autosuspend_delay(&pdev->dev, 1000);
-		pm_runtime_use_autosuspend(&pdev->dev);
-		pm_runtime_set_active(&pdev->dev);
-		pm_runtime_enable(&pdev->dev);
-	}
+	pm_runtime_get_noresume(&pdev->dev);
+	pm_runtime_set_autosuspend_delay(&pdev->dev, 1000);
+	pm_runtime_use_autosuspend(&pdev->dev);
+	pm_runtime_set_active(&pdev->dev);
+	pm_runtime_enable(&pdev->dev);
+
+	if (dev->pm_runtime_disabled)
+		pm_runtime_get_noresume(&pdev->dev);
 
 	r = i2c_dw_probe(dev);
-	if (r && !dev->pm_runtime_disabled)
+	if (r) {
+		if (!IS_ERR(dev->clk))
+			clk_disable_unprepare(dev->clk);
 		pm_runtime_disable(&pdev->dev);
+		pm_runtime_dont_use_autosuspend(&pdev->dev);
+		if (dev->pm_runtime_disabled)
+			pm_runtime_put_noidle(&pdev->dev);
+	}
+	pm_runtime_mark_last_busy(&pdev->dev);
+	pm_runtime_put(&pdev->dev);
 
 	return r;
 }
@@ -269,10 +269,16 @@ static int dw_i2c_plat_remove(struct platform_device *pdev)
 
 	i2c_dw_disable(dev);
 
+	if (!IS_ERR(dev->clk))
+		clk_disable_unprepare(dev->clk);
+
+	pm_runtime_disable(&pdev->dev);
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
-	pm_runtime_put_sync(&pdev->dev);
-	if (!dev->pm_runtime_disabled)
-		pm_runtime_disable(&pdev->dev);
+	if (dev->pm_runtime_disabled)
+		pm_runtime_put_noidle(&pdev->dev);
+
+	pm_runtime_put_noidle(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
 
 	return 0;
 }
@@ -285,24 +291,20 @@ static const struct of_device_id dw_i2c_of_match[] = {
 MODULE_DEVICE_TABLE(of, dw_i2c_of_match);
 #endif
 
-#ifdef CONFIG_PM_SLEEP
-static int dw_i2c_plat_prepare(struct device *dev)
-{
-	return pm_runtime_suspended(dev);
-}
-
-static void dw_i2c_plat_complete(struct device *dev)
-{
-	if (dev->power.direct_complete)
-		pm_request_resume(dev);
-}
-#else
-#define dw_i2c_plat_prepare	NULL
-#define dw_i2c_plat_complete	NULL
-#endif
-
 #ifdef CONFIG_PM
-static int dw_i2c_plat_suspend(struct device *dev)
+static int i2c_dw_plat_prepare_clk(struct dw_i2c_dev *i_dev, bool prepare)
+{
+	if (IS_ERR(i_dev->clk))
+		return PTR_ERR(i_dev->clk);
+
+	if (prepare)
+		return clk_prepare_enable(i_dev->clk);
+
+	clk_disable_unprepare(i_dev->clk);
+	return 0;
+}
+
+static int dw_i2c_plat_runtime_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct dw_i2c_dev *i_dev = platform_get_drvdata(pdev);
@@ -313,24 +315,23 @@ static int dw_i2c_plat_suspend(struct device *dev)
 	return 0;
 }
 
-static int dw_i2c_plat_resume(struct device *dev)
+static int dw_i2c_plat_runtime_resume(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct dw_i2c_dev *i_dev = platform_get_drvdata(pdev);
 
 	i2c_dw_plat_prepare_clk(i_dev, true);
-
-	if (!i_dev->pm_runtime_disabled)
-		i2c_dw_init(i_dev);
+	i2c_dw_init(i_dev);
 
 	return 0;
 }
 
 static const struct dev_pm_ops dw_i2c_dev_pm_ops = {
-	.prepare = dw_i2c_plat_prepare,
-	.complete = dw_i2c_plat_complete,
-	SET_SYSTEM_SLEEP_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume)
-	SET_RUNTIME_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+	SET_RUNTIME_PM_OPS(dw_i2c_plat_runtime_suspend,
+			dw_i2c_plat_runtime_resume,
+			NULL)
 };
 
 #define DW_I2C_DEV_PMOPS (&dw_i2c_dev_pm_ops)
