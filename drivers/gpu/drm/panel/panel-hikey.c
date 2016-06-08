@@ -296,11 +296,13 @@ static int hikey_panel_prepare(struct drm_panel *p)
 	 */
 	msleep(250);
 
+#ifndef CONFIG_DRM_ICN_6201
 	/* init the panel */
 	ret = hikey_panel_wirte_cmds(panel->dsi, n070icn_init_cmds,
 				     ARRAY_SIZE(n070icn_init_cmds));
 	if (ret < 0)
 		return ret;
+#endif
 
 	panel->prepared = true;
 
@@ -324,6 +326,7 @@ static int hikey_panel_enable(struct drm_panel *p)
 }
 
 static const struct drm_display_mode default_mode = {
+#ifndef CONFIG_DRM_ICN_6201
 	.clock = 66800,
 
 	.hdisplay = 800,
@@ -335,6 +338,19 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = 1280 + 10,
 	.vsync_end = 1280 + 10 + 4,
 	.vtotal = 1280 + 10 + 4 + 12,
+#else
+	.clock = 55000,//56000,//60000,
+
+	.hdisplay = 1024,
+	.hsync_start = 1024 + 140,
+	.hsync_end = 1024 + 140 + 40,
+	.htotal = 1024 + 140 + 40 + 140,
+
+	.vdisplay = 600,
+	.vsync_start = 600 + 15,
+	.vsync_end = 600 + 75 + 5,
+	.vtotal = 600 + 15 + 5 + 75,
+#endif
 };
 
 static int hikey_panel_get_modes(struct drm_panel *panel)
@@ -438,7 +454,7 @@ static int hikey_panel_probe(struct mipi_dsi_device *dsi)
 	int ret;
 
 	DRM_INFO("hikey_panel_probe enter\n");
-
+	
 	panel = devm_kzalloc(dev, sizeof(*panel), GFP_KERNEL);
 	if (!panel)
 		return -ENOMEM;
