@@ -375,3 +375,31 @@
 		};
 	};
  };
+
+&i2c0 {
+  #address-cells = <1>;
+	#size-cells = <0>;
+	status = "ok";
+
+	tp: tp@8{
+		compatible = "FocalTech,ft5506";
+		reg = <0x38>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <7 2>;
+		rst-gpio = <&gpio9 1 1>;
+	};
+};
+
+&i2c1 {
+  #address-cells = <1>;
+	#size-cells = <0>;
+	status = "ok";
+
+	icn6201: icn6201@5a{
+		compatible = "ChipOne,icn6201";
+		reg = <0x2d>;
+		pwr-en-gpio = <&gpio2 1 0>;
+		bl-en-gpio = <&gpio2 3 0>;
+		pwm-gpio = <&gpio12 7 0>;
+	};
+};
