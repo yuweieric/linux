@@ -160,7 +160,7 @@ static void adv7511_set_colormap(struct adv7511 *adv7511, bool enable,
 			   ADV7511_CSC_UPDATE_MODE, 0);
 }
 
-static int adv7511_packet_enable(struct adv7511 *adv7511, unsigned int packet)
+int adv7511_packet_enable(struct adv7511 *adv7511, unsigned int packet)
 {
 	if (packet & 0xff)
 		regmap_update_bits(adv7511->regmap, ADV7511_REG_PACKET_ENABLE0,
@@ -175,7 +175,7 @@ static int adv7511_packet_enable(struct adv7511 *adv7511, unsigned int packet)
 	return 0;
 }
 
-static int adv7511_packet_disable(struct adv7511 *adv7511, unsigned int packet)
+int adv7511_packet_disable(struct adv7511 *adv7511, unsigned int packet)
 {
 	if (packet & 0xff)
 		regmap_update_bits(adv7511->regmap, ADV7511_REG_PACKET_ENABLE0,
@@ -1037,6 +1037,8 @@ static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		goto err_unregister_cec;
 	}
 
+	adv7511_audio_init(dev);
+
 	return 0;
 
 err_unregister_cec:
@@ -1057,6 +1059,8 @@ static int adv7511_remove(struct i2c_client *i2c)
 	}
 
 	drm_bridge_remove(&adv7511->bridge);
+
+	adv7511_audio_exit(&i2c->dev);
 
 	i2c_unregister_device(adv7511->i2c_edid);
 
