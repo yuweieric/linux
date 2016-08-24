@@ -45,6 +45,20 @@
 		      <0x00000000 0x22000000 0x00000000 0x1c000000>;
 	};
 
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x00000000 0x08000000>;
+			linux,cma-default;
+		};
+	};
+
 	pstore: pstore@0x21f00000 {
 		no-map;
 		reg = <0x0 0x21f00000 0x0 0x00100000>;  /* pstore/ramoops buffer */
