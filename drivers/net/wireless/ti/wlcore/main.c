@@ -4986,7 +4986,6 @@ static int wl12xx_sta_add(struct wl1271 *wl,
 		return ret;
 
 	wl_sta = (struct wl1271_station *)sta->drv_priv;
-	wl_sta->wl = wl;
 	hlid = wl_sta->hlid;
 
 	ret = wl12xx_cmd_add_peer(wl, wlvif, sta, hlid);
@@ -5700,10 +5699,11 @@ out:
 	mutex_unlock(&wl->mutex);
 }
 
-static u32 wlcore_op_get_expected_throughput(struct ieee80211_sta *sta)
+static u32 wlcore_op_get_expected_throughput(struct ieee80211_hw *hw,
+					struct ieee80211_sta *sta)
 {
 	struct wl1271_station *wl_sta = (struct wl1271_station *)sta->drv_priv;
-	struct wl1271 *wl = wl_sta->wl;
+	struct wl1271 *wl = hw->priv;
 	u8 hlid = wl_sta->hlid;
 
 	/* return in units of Kbps */
