@@ -37,6 +37,7 @@
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
 #include <linux/io.h>
+#include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/acpi.h>
 #include <linux/platform_data/i2c-designware.h>
@@ -132,35 +133,6 @@ static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
 }
 #endif
 
-struct dw_hisi_controller {
-	void __iomem *reset_reg_base;
-	u32 reset_enable_off;
-	u32 reset_disable_off;
-	u32 reset_status_off;
-	u32 reset_bit;
-};
-
-static void hs_i2c_dw_reset_controller(struct dw_hisi_controller *c)
-{
-	u32 val = 0, timeout = 10;
-
-	writel(BIT(c->reset_bit), c->reset_reg_base + c->reset_enable_off);
-	do {
-		val = readl(c->reset_reg_base + c->reset_status_off);
-		val &= BIT(c->reset_bit);
-		udelay(1);
-	} while (!val && timeout--);
-
-	timeout = 10;
-
-	writel(BIT(c->reset_bit), c->reset_reg_base + c->reset_disable_off);
-	do {
-		val = readl(c->reset_reg_base + c->reset_status_off);
-		val &= BIT(c->reset_bit);
-		udelay(1);
-	} while (val && timeout--);
-}
-
 static void set_adv7533_pmic_reg(void)
 {
         unsigned char data = 0;
@@ -186,8 +158,6 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	struct dw_i2c_platform_data *pdata;
 	int irq, r;
 	u32 clk_freq, ht = 0;
-	struct dw_hisi_controller *controller;
-	u32 data[4] = {0};
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -206,11 +176,9 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	dev->irq = irq;
 	platform_set_drvdata(pdev, dev);
 
-	controller = devm_kzalloc(&pdev->dev, sizeof(struct dw_hisi_controller), GFP_KERNEL);
-	if (!controller) {
-		dev_err(dev->dev, "mem alloc failed for controller\n");
-		return -ENOMEM;
-	}
+	dev->rst = devm_reset_control_get(&pdev->dev, NULL);
+	if (!IS_ERR(dev->rst))
+		reset_control_reset(dev->rst);
 
 	/* fast mode by default because of legacy reasons */
 	clk_freq = 400000;
@@ -238,23 +206,6 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Only 100kHz and 400kHz supported");
 			return -EINVAL;
 		}
-		r = of_property_read_u32_array(pdev->dev.of_node, "reset-reg-base", &data[0], 4);
-		if (r)
-			dev_err(dev->dev,  "doesn't have reset-reg-base property!\n");
-		else
-			controller->reset_reg_base = devm_ioremap(&pdev->dev, data[1], data[3]);
-
-		r = of_property_read_u32_array(pdev->dev.of_node, "reset-controller-reg",
-				&data[0], 4);
-		if (r) {
-			dev_err(dev->dev, "doesn't have reset-controller-reg property!\n");
-		} else {
-			controller->reset_enable_off = data[0];
-			controller->reset_disable_off = data[1];
-			controller->reset_status_off = data[2];
-			controller->reset_bit = data[3];
-		}
-
 	} else {
 		pdata = dev_get_platdata(&pdev->dev);
 		if (pdata)
@@ -272,8 +223,6 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 		I2C_FUNC_SMBUS_BYTE_DATA |
 		I2C_FUNC_SMBUS_WORD_DATA |
 		I2C_FUNC_SMBUS_I2C_BLOCK;
-
-	hs_i2c_dw_reset_controller(controller);
 
 	if (clk_freq == 100000)
 		dev->master_cfg =  DW_IC_CON_MASTER | DW_IC_CON_SLAVE_DISABLE |
