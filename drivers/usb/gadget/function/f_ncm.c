@@ -105,7 +105,18 @@ static inline unsigned ncm_bitrate(struct usb_gadget *g)
  * because it's used by default by the current linux host driver
  */
 #define NTB_DEFAULT_IN_SIZE	16384
-#define NTB_OUT_SIZE		16384
+/*
+ * Allow the host to group frames, but do not make the NTB out size a multiple
+ * of wMaxPacketSize. This is a workaround for USB drivers (e.g. dwc3) which
+ * only report a transfer as complete when they receive a short packet. We
+ * choose the NTB to be similar to the default in the current Linux host driver
+ * (which is 16K) subject to this constraint.
+ *
+ * We use a USB fixed buffer size just larger than the NTB out size, because it
+ * must be a multiple of wMaxPacketSize.
+ */
+#define NTB_OUT_SIZE		16368
+#define USB_OUT_BUFFER_SIZE	16384
 
 /* Allocation for storing the NDP, 32 should suffice for a
  * 16k packet. This allows a maximum of 32 * 507 Byte packets to
@@ -333,6 +344,9 @@ static struct usb_descriptor_header *ncm_hs_function[] = {
 	NULL,
 };
 
+/* super speed support: */
+#include "function-hisi/f_ncm_hisi.c"
+
 /* string descriptors: */
 
 #define STRING_CTRL_IDX	0
@@ -464,7 +478,7 @@ static inline void ncm_reset_values(struct f_ncm *ncm)
 	/* doesn't make sense for ncm, fixed size used */
 	ncm->port.header_len = 0;
 
-	ncm->port.fixed_out_len = le32_to_cpu(ntb_parameters.dwNtbOutMaxSize);
+	ncm->port.fixed_out_len = USB_OUT_BUFFER_SIZE;
 	ncm->port.fixed_in_len = NTB_DEFAULT_IN_SIZE;
 }
 
@@ -1431,8 +1445,19 @@ static int ncm_bind(struct usb_configuration *c, struct usb_function *f)
 	hs_ncm_notify_desc.bEndpointAddress =
 		fs_ncm_notify_desc.bEndpointAddress;
 
+#ifdef CONFIG_HISI_USB_FUNC_ADD_SS_DESC
+	ss_ncm_in_desc.bEndpointAddress = fs_ncm_in_desc.bEndpointAddress;
+	ss_ncm_out_desc.bEndpointAddress = fs_ncm_out_desc.bEndpointAddress;
+	ss_ncm_notify_desc.bEndpointAddress =
+		fs_ncm_notify_desc.bEndpointAddress;
+
+	status = usb_assign_descriptors(f, ncm_fs_function, ncm_hs_function,
+			ncm_ss_function);
+#else
 	status = usb_assign_descriptors(f, ncm_fs_function, ncm_hs_function,
 			NULL);
+#endif
+
 	if (status)
 		goto fail;
 
@@ -1522,7 +1547,12 @@ static struct usb_function_instance *ncm_alloc_inst(void)
 		return ERR_PTR(-ENOMEM);
 	mutex_init(&opts->lock);
 	opts->func_inst.free_func_inst = ncm_free_inst;
+#ifdef CONFIG_HISI_USB_CONFIGFS
+	opts->net = gether_setup_name_default("ncm");
+#else
 	opts->net = gether_setup_default();
+#endif
+
 	if (IS_ERR(opts->net)) {
 		struct net_device *net = opts->net;
 		kfree(opts);
@@ -1539,9 +1569,42 @@ static void ncm_free(struct usb_function *f)
 	struct f_ncm *ncm;
 	struct f_ncm_opts *opts;
 
+#ifdef CONFIG_HISI_USB_CONFIGFS
+#define ADDR_LEN 36
+	char host_addr[ADDR_LEN];
+	char dev_addr[ADDR_LEN];
+	unsigned qmult;
+#endif
+
 	ncm = func_to_ncm(f);
 	opts = container_of(f->fi, struct f_ncm_opts, func_inst);
 	kfree(ncm);
+
+#ifdef CONFIG_HISI_USB_CONFIGFS
+	/* backup dev_addr host_addr and qmult */
+	gether_get_dev_addr(opts->net, dev_addr, ADDR_LEN);
+	gether_get_host_addr(opts->net, host_addr, ADDR_LEN);
+	qmult = gether_get_qmult(opts->net);
+
+	if (opts->bound) {
+		gether_cleanup(netdev_priv(opts->net));
+	} else
+		free_netdev(opts->net);
+	opts->bound = false;
+
+	/* rollback to the state that after ncm_alloc_inst */
+	opts->net = gether_setup_name_default("ncm");
+	if (IS_ERR(opts->net)) {
+		pr_err("%s, prepare inst fail\n", __func__);
+		return;
+	}
+
+	/* restore the old dev_addr host_addr and qmult */
+	gether_set_dev_addr(opts->net, dev_addr);
+	gether_set_host_addr(opts->net, host_addr);
+	gether_set_qmult(opts->net, qmult);
+#endif
+
 	mutex_lock(&opts->lock);
 	opts->refcnt--;
 	mutex_unlock(&opts->lock);

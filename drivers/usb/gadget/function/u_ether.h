@@ -91,7 +91,11 @@ struct gether {
 			|USB_CDC_PACKET_TYPE_DIRECTED)
 
 /* variant of gether_setup that allows customizing network device name */
+#ifdef CONFIG_HISI_USB_CONFIGFS
+struct net_device *gether_setup_name(struct usb_gadget *g,
+#else
 struct eth_dev *gether_setup_name(struct usb_gadget *g,
+#endif
 		const char *dev_addr, const char *host_addr,
 		u8 ethaddr[ETH_ALEN], unsigned qmult, const char *netname);
 
@@ -108,7 +112,11 @@ struct eth_dev *gether_setup_name(struct usb_gadget *g,
  *
  * Returns a eth_dev pointer on success, or an ERR_PTR on failure
  */
+#ifdef CONFIG_HISI_USB_CONFIGFS
+static inline struct net_device *gether_setup(struct usb_gadget *g,
+#else
 static inline struct eth_dev *gether_setup(struct usb_gadget *g,
+#endif
 		const char *dev_addr, const char *host_addr,
 		u8 ethaddr[ETH_ALEN], unsigned qmult)
 {

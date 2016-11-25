@@ -892,6 +892,10 @@ void usb_remove_config(struct usb_composite_dev *cdev,
 	if (cdev->config == config)
 		reset_config(cdev);
 
+	/* Change due to DTS2014041608868 */
+	if (!list_empty(&cdev->configs))
+		list_del(&config->list);
+
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
 	remove_config(cdev, config);
@@ -1766,6 +1770,14 @@ unknown:
 				}
 				break;
 			}
+
+			if (value < 0) {
+				pr_err("non-support control req%02x.%02x v%04x i%04x l%d\n",
+					ctrl->bRequestType, ctrl->bRequest,
+					w_value, w_index, w_length);
+				return value;
+			}
+
 			req->length = value;
 			req->context = cdev;
 			req->zero = value < w_length;

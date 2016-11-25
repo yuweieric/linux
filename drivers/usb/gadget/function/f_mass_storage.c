@@ -508,7 +508,12 @@ static int fsg_setup(struct usb_function *f,
 	u16			w_value = le16_to_cpu(ctrl->wValue);
 	u16			w_length = le16_to_cpu(ctrl->wLength);
 
+	/* modify to adapt for Android */
+#ifdef CONFIG_HISI_USB_CONFIGFS
+	if (!fsg->common->fsg)
+#else
 	if (!fsg_is_set(fsg->common))
+#endif
 		return -EOPNOTSUPP;
 
 	++fsg->common->ep0_req_tag;	/* Record arrival of a new request */
@@ -1205,6 +1210,9 @@ static int do_read_header(struct fsg_common *common, struct fsg_buffhd *bh)
 	return 8;
 }
 
+#include "function-hisi/f_mass_storage_hisi.c"
+
+#ifndef CONFIG_USB_MASS_STORAGE_SUPPORT_MAC
 static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 {
 	struct fsg_lun	*curlun = common->curlun;
@@ -1231,6 +1239,7 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	store_cdrom_address(&buf[16], msf, curlun->num_sectors);
 	return 20;
 }
+#endif
 
 static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
 {
@@ -1963,9 +1972,16 @@ static int do_scsi_command(struct fsg_common *common)
 			goto unknown_cmnd;
 		common->data_size_from_cmnd =
 			get_unaligned_be16(&common->cmnd[7]);
+#ifdef CONFIG_USB_MASS_STORAGE_SUPPORT_MAC
+		reply = check_command(common, 10, DATA_DIR_TO_HOST,
+				      (3<<1) | (7<<7), 1,
+				      "READ TOC");
+#else
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
 				      (7<<6) | (1<<1), 1,
 				      "READ TOC");
+#endif
+
 		if (reply == 0)
 			reply = do_read_toc(common, bh);
 		break;
@@ -2833,9 +2849,9 @@ static umode_t fsg_lun_dev_is_visible(struct kobject *kobj,
 	struct fsg_lun *lun = fsg_lun_from_dev(dev);
 
 	if (attr == &dev_attr_ro.attr)
-		return lun->cdrom ? S_IRUGO : (S_IWUSR | S_IRUGO);
+		return lun->cdrom ? S_IRUGO : (S_IWUSR | S_IRUGO); /* [false alarm]:this is original code */
 	if (attr == &dev_attr_file.attr)
-		return lun->removable ? (S_IWUSR | S_IRUGO) : S_IRUGO;
+		return lun->removable ? (S_IWUSR | S_IRUGO) : S_IRUGO;/* [false alarm]:this is original code */
 	return attr->mode;
 }
 
@@ -2976,6 +2992,29 @@ void fsg_common_set_inquiry_string(struct fsg_common *common, const char *vn,
 		 i);
 }
 EXPORT_SYMBOL_GPL(fsg_common_set_inquiry_string);
+
+int fsg_common_run_thread(struct fsg_common *common)
+{
+	common->state = FSG_STATE_IDLE;
+	/* Tell the thread to start working */
+	if (!common->thread_task) {
+		/* "file-storage" thread should be created
+		 * only when thread_task is null */
+		common->thread_task =
+			kthread_create(fsg_main_thread, common, "file-storage");
+		if (IS_ERR(common->thread_task)) {
+			common->state = FSG_STATE_TERMINATED;
+			return PTR_ERR(common->thread_task);
+		}
+	}
+
+	DBG(common, "I/O thread pid: %d\n", task_pid_nr(common->thread_task));
+
+	wake_up_process(common->thread_task);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(fsg_common_run_thread);
 
 static void fsg_common_release(struct kref *ref)
 {
@@ -3473,8 +3512,17 @@ static struct usb_function_instance *fsg_alloc_inst(void)
 	config.removable = true;
 	rc = fsg_common_create_lun(opts->common, &config, 0, "lun.0",
 			(const char **)&opts->func_inst.group.cg_item.ci_name);
+
+#ifdef CONFIG_HISI_USB_CONFIGFS
 	if (rc)
-		goto release_buffers;
+		goto release_luns;
+
+	if (create_mass_storage_device(&opts->func_inst)) {
+		rc = -ENODEV;
+		goto remove_luns;
+	}
+#endif
+
 
 	opts->lun0.lun = opts->common->luns[0];
 	opts->lun0.lun_id = 0;
@@ -3486,6 +3534,10 @@ static struct usb_function_instance *fsg_alloc_inst(void)
 
 	return &opts->func_inst;
 
+#ifdef CONFIG_HISI_USB_CONFIGFS
+remove_luns:
+	fsg_common_remove_luns(opts->common);
+#endif
 release_buffers:
 	fsg_common_free_buffers(opts->common);
 release_opts:

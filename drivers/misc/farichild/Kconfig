@@ -1,0 +1,8 @@
+#
+# farichild devices
+#
+
+menu "farichild devices"
+source "drivers/misc/farichild/switch/Kconfig"
+source "drivers/misc/farichild/otg_gpio_switch/Kconfig"
+endmenu

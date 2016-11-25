@@ -1,0 +1,9 @@
+obj-y	+= tusb422_linux.o
+obj-y	+= tusb422_common.o
+obj-y	+= tusb422.o
+obj-y	+= tcpci.o
+obj-y	+= tcpm.o
+obj-y	+= usb_pd_policy_engine.o
+obj-y	+= usb_pd_policy_manager.o
+obj-y	+= usb_pd_protocol.o
+obj-y	+= usb_pd_pal.o

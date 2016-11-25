@@ -31,6 +31,7 @@
 #include <linux/slab.h>
 #include <linux/seq_file.h>
 #include <linux/netdevice.h>
+#include <linux/spinlock.h>
 
 #include <asm/io.h>
 #include <asm/byteorder.h>
@@ -65,6 +66,8 @@ MODULE_PARM_DESC (rndis_debug, "enable debugging");
 #endif /* CONFIG_USB_GADGET_DEBUG_FILES */
 
 static DEFINE_IDA(rndis_ida);
+/* spin lock for response list */
+DEFINE_SPINLOCK(rndis_response_lock);//rndis_response_lock initialization move to here for linaro-kernel 4.4 has remove the function rndis_init and rndis_exit
 
 /* Driver Version */
 static const __le32 rndis_driver_version = cpu_to_le32(1);
@@ -680,6 +683,15 @@ static int rndis_reset_response(struct rndis_params *params,
 {
 	rndis_reset_cmplt_type *resp;
 	rndis_resp_t *r;
+	u32 length;
+	u8 *xbuf;
+
+
+	spin_lock(&rndis_response_lock);
+	/* drain the response queue */
+	while ((xbuf = rndis_get_next_response(params, &length)))
+		rndis_free_response(params, buf);
+	spin_unlock(&rndis_response_lock);
 
 	r = rndis_add_response(params, sizeof(rndis_reset_cmplt_type));
 	if (!r)
@@ -768,9 +780,11 @@ void rndis_uninit(struct rndis_params *params)
 		return;
 	params->state = RNDIS_UNINITIALIZED;
 
+	spin_lock(&rndis_response_lock);
 	/* drain the response queue */
 	while ((buf = rndis_get_next_response(params, &length)))
 		rndis_free_response(params, buf);
+	spin_unlock(&rndis_response_lock);
 }
 EXPORT_SYMBOL_GPL(rndis_uninit);
 
@@ -850,8 +864,9 @@ int rndis_msg_parser(struct rndis_params *params, u8 *buf)
 		 */
 		pr_warning("%s: unknown RNDIS message 0x%08X len %d\n",
 			__func__, MsgType, MsgLength);
+		/* In some error cases, MsgLength may very large */
 		print_hex_dump_bytes(__func__, DUMP_PREFIX_OFFSET,
-				     buf, MsgLength);
+				     buf, MsgLength > 64 ? 64 : MsgLength);
 		break;
 	}
 
@@ -1053,7 +1068,9 @@ static rndis_resp_t *rndis_add_response(struct rndis_params *params, u32 length)
 	r->length = length;
 	r->send = 0;
 
+	spin_lock(&rndis_response_lock);
 	list_add_tail(&r->list, &(params->resp_queue));
+	spin_unlock(&rndis_response_lock);
 	return r;
 }
 
