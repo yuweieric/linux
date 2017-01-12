@@ -1007,6 +1007,8 @@
 		};
 
 		hisi_usb@ff200000 {
+			#address-cells = <2>;
+			#size-cells = <2>;
 			compatible = "hisilicon,hi3660-dwc3";
 			reg = <0x0 0xff200000 0x0 0x1000 0x0 0xff100000 0x0 0x100000>;
 			ranges;
