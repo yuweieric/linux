@@ -2429,6 +2429,16 @@ config FB_HYPERV
 	help
 	  This framebuffer driver supports Microsoft Hyper-V Synthetic Video.
 
+config FB_HISI
+	tristate "Hisilicon Framebuffer support"
+	depends on FB
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	select REGMAP
+	help
+	  This framebuffer driver supports Hisilicon FB.
+
 config FB_SIMPLE
 	bool "Simple framebuffer support"
 	depends on (FB = y)

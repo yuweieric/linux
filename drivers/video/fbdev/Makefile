@@ -5,8 +5,6 @@
 # Each configuration option enables a list of files.
 
 obj-y				+= core/
-obj-y				+= hisi/dss/
-
 obj-$(CONFIG_EXYNOS_VIDEO)     += exynos/
 
 obj-$(CONFIG_FB_MACMODES)      += macmodes.o
@@ -26,6 +24,7 @@ obj-$(CONFIG_FB_I740)		  += i740fb.o
 obj-$(CONFIG_FB_MATROX)		  += matrox/
 obj-$(CONFIG_FB_RIVA)		  += riva/
 obj-$(CONFIG_FB_NVIDIA)		  += nvidia/
+obj-$(CONFIG_FB_HISI)             += hisi/dss/
 obj-$(CONFIG_FB_ATY)		  += aty/ macmodes.o
 obj-$(CONFIG_FB_ATY128)		  += aty/ macmodes.o
 obj-$(CONFIG_FB_RADEON)		  += aty/

@@ -179,7 +179,7 @@
 		fpga_flag = <0>;
 		status = "disabled";
 	};
-	/* display start */
+	/* display end */
 
 	soc {
 		compatible = "simple-bus";
