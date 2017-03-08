@@ -41,3 +41,7 @@
 &uart6 {
 	status = "okay";
 };
+
+&ufs {
+	reset-gpio = <&gpio18 1 0>;
+};
