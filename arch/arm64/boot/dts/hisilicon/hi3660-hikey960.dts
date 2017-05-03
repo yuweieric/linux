@@ -1,0 +1,112 @@
+/*
+ * dts file for Hisilicon HiKey960 Development Board
+ *
+ * Copyright (C) 2016, Hisilicon Ltd.
+ *
+ */
+
+/dts-v1/;
+
+#include "hi3660.dtsi"
+/*#include "hi3660-ion.dtsi"*/
+#include "hikey960-pinctrl.dtsi"
+#include "hi3660-gpu.dtsi"
+
+/ {
+	model = "HiKey960";
+	compatible = "hisilicon,hi3660-hikey960", "hisilicon,hi3660";
+
+	aliases {
+		mshc1 = &dwmmc1;
+		mshc2 = &dwmmc2;
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		serial3 = &uart3;
+		serial4 = &uart4;
+		serial5 = &uart5;
+		serial6 = &uart6;
+	};
+
+	chosen {};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00400000 0x0 0xBFE00000>;
+	};
+
+	soc {
+		uart5: serial@fdf05000 {
+			status = "ok";
+		};
+
+		uart6: serial@fff32000 {
+			status = "ok";
+		};
+
+		ufs: ufs@ff3b0000 {
+			reset-gpio = <&gpio18 1 0>;
+		};
+	};
+
+	/* power control mechanism for WLAN_EN */
+	wlan_en_reg: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "wlan-en-regulator";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+
+		/* WLAN_EN GPIO for this board - GPIO_051_WIFI_EN */
+		gpio = <&gpio6 3 0>;
+
+		/* WLAN card specific delay */
+		startup-delay-us = <70000>;
+		enable-active-high;
+	};
+
+	/* bluetooth - TI WL1835 */
+	kim {
+		compatible = "kim";
+		pinctrl-names = "default";
+		pinctrl-0 = <>; /* FIXME: add BT PCM pinctrl here */
+		/*
+		 * FIXME: The following is complete CRAP since
+		 * the vendor driver doesn't follow the gpio
+		 * binding. Passing in a magic Linux gpio number
+		 * here until we fix the vendor driver.
+		 */
+		/* BT_EN: GPIO_126_BT_EN */
+		nshutdown_gpio = <390>;
+		dev_name = "/dev/ttyAMA4";
+		flow_cntrl = <1>;
+		baud_rate = <921600>;
+		/* baud_rate = <1500000>; nok */
+	};
+
+	btwilink {
+		compatible = "btwilink";
+	};
+};
+
+&dwmmc2 { /* WIFI */
+	broken-cd;
+	/* WL_EN */
+	vmmc-supply = <&wlan_en_reg>;
+	ti,non-removable;
+	non-removable;
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
+	status = "ok";
+
+	wlcore: wlcore@2 {
+		compatible = "ti,wl1837";
+		reg = <2>;      /* sdio func num */
+		/* WL_IRQ, GPIO_179_WL_WAKEUP_AP */
+		interrupt-parent = <&gpio22>;
+		interrupts = <3 1>; /* IRQ_TYPE_EDGE_RISING */
+	};
+};
+
+&uart4 {
+	status = "ok";
+};
