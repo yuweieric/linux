@@ -2077,6 +2077,12 @@ void usb_disconnect(struct usb_device **pdev)
 	 */
 	pm_runtime_barrier(&udev->dev);
 
+	if (udev->speed < USB_SPEED_HIGH ) {
+		struct usb_hcd *hcd = bus_to_hcd(udev->bus);
+		if (hcd->driver->change_bus_speed)
+			hcd->driver->change_bus_speed(hcd, 0);
+	}
+
 	usb_lock_device(udev);
 
 	hub_disconnect_children(udev);
@@ -4843,9 +4849,19 @@ loop:
 	if (hub->hdev->parent ||
 			!hcd->driver->port_handed_over ||
 			!(hcd->driver->port_handed_over)(hcd, port1)) {
-		if (status != -ENOTCONN && status != -ENODEV)
+		if (status != -ENOTCONN && status != -ENODEV) {
 			dev_err(&port_dev->dev,
-					"unable to enumerate USB device\n");
+					"unable to enumerate USB device"
+					" at %s while bus at %s \n",
+					usb_speed_string(udev->speed),
+					hdev->descriptor.bDeviceProtocol == USB_HUB_PR_FS ?
+						"FULL_SPEED" : "HIGH_SPEED");
+
+			if (udev->speed < USB_SPEED_HIGH &&
+			    hdev->descriptor.bDeviceProtocol > USB_HUB_PR_FS &&
+			    hcd->driver->change_bus_speed)
+				hcd->driver->change_bus_speed(hcd, 1);
+		}
 	}
 
 done:
