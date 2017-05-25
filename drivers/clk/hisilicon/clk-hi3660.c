@@ -57,6 +57,8 @@ static const struct hisi_fixed_factor_clock hi3660_crg_fixed_factor_clks[] = {
 	{ HI3660_PCIEPHY_REF, "clk_pciephy_ref", "clk_div_pciephy", 1, 1, 0, },
 	{ HI3660_CLK_ABB_USB, "clk_abb_usb", "clk_gate_usb_tcxo_en", 1, 1, 0 },
 	{ HI3660_VENC_VOLT_HOLD, "venc_volt_hold", "peri_volt_hold", 1, 1, 0, },
+	{ HI3660_CLK_FAC_ISP_SNCLK, "clk_isp_snclk_fac", "clk_isp_snclk_angt",
+	  1, 10, 0, },
 };
 
 static const struct hisi_gate_clock hi3660_crgctrl_gate_sep_clks[] = {
@@ -164,6 +166,12 @@ static const struct hisi_gate_clock hi3660_crgctrl_gate_sep_clks[] = {
 	  CLK_SET_RATE_PARENT, 0x40, 17, 0, },
 	{ HI3660_CLK_GATE_SDIO0, "clk_gate_sdio0", "clk_mux_sdio_sys",
 	  CLK_SET_RATE_PARENT, 0x40, 19, 0, },
+	{ HI3660_CLK_GATE_ISP_SNCLK0, "clk_gate_isp_snclk0",
+	  "clk_isp_snclk_mux", CLK_SET_RATE_PARENT, 0x50, 16, 0, },
+	{ HI3660_CLK_GATE_ISP_SNCLK1, "clk_gate_isp_snclk1",
+	  "clk_isp_snclk_mux", CLK_SET_RATE_PARENT, 0x50, 17, 0, },
+	{ HI3660_CLK_GATE_ISP_SNCLK2, "clk_gate_isp_snclk2",
+	  "clk_isp_snclk_mux", CLK_SET_RATE_PARENT, 0x50, 18, 0, },
 	{ HI3660_CLK_GATE_UFS_SUBSYS, "clk_gate_ufs_subsys", "clk_div_sysbus",
 	  CLK_SET_RATE_PARENT, 0x50, 21, 0, },
 	{ HI3660_PCLK_GATE_DSI0, "pclk_gate_dsi0", "clk_div_cfgbus",
@@ -215,6 +223,8 @@ static const struct hisi_gate_clock hi3660_crgctrl_gate_clks[] = {
 	  CLK_SET_RATE_PARENT, 0xf8, 3, CLK_GATE_HIWORD_MASK, },
 	{ HI3660_CLK_320M_PLL_GT, "clk_320m_pll_gt", "clk_mux_320m",
 	  CLK_SET_RATE_PARENT, 0xf8, 10, 0, },
+	{ HI3660_CLK_ANGT_ISP_SNCLK, "clk_isp_snclk_angt", "clk_div_a53hpm",
+	  CLK_SET_RATE_PARENT, 0x108, 2, CLK_GATE_HIWORD_MASK, },
 	{ HI3660_AUTODIV_EMMC0BUS, "autodiv_emmc0bus", "autodiv_sysbus",
 	  CLK_SET_RATE_PARENT, 0x404, 1, CLK_GATE_HIWORD_MASK, },
 	{ HI3660_AUTODIV_SYSBUS, "autodiv_sysbus", "clk_div_sysbus",
@@ -261,6 +271,8 @@ static const char *const
 clk_mux_i2c_p[] = {"clkin_sys", "clk_div_i2c",};
 static const char *const
 clk_mux_venc_p[] = {"clk_ppll0", "clk_ppll1", "clk_ppll3", "clk_ppll3",};
+static const char *const
+clk_mux_isp_snclk_p[] = {"clkin_sys", "clk_isp_snclk_div"};
 
 static const struct hisi_mux_clock hi3660_crgctrl_mux_clks[] = {
 	{ HI3660_CLK_MUX_SYSBUS, "clk_mux_sysbus", clk_mux_sysbus_p,
@@ -320,6 +332,9 @@ static const struct hisi_mux_clock hi3660_crgctrl_mux_clks[] = {
 	{ HI3660_CLK_MUX_320M, "clk_mux_320m", clk_mux_pll02p,
 	  ARRAY_SIZE(clk_mux_pll02p), CLK_SET_RATE_PARENT, 0x100, 0, 1,
 	  CLK_MUX_HIWORD_MASK, },
+	{ HI3660_CLK_MUX_ISP_SNCLK, "clk_isp_snclk_mux", clk_mux_isp_snclk_p,
+	  ARRAY_SIZE(clk_mux_isp_snclk_p), CLK_SET_RATE_PARENT, 0x108, 3, 1,
+	  CLK_MUX_HIWORD_MASK, },
 	{ HI3660_CLK_MUX_IOPERI, "clk_mux_ioperi", clk_mux_ioperi_p,
 	  ARRAY_SIZE(clk_mux_ioperi_p), CLK_SET_RATE_PARENT, 0x108, 10, 1,
 	  CLK_MUX_HIWORD_MASK, },
@@ -366,6 +381,8 @@ static const struct hisi_divider_clock hi3660_crgctrl_divider_clks[] = {
 	  CLK_SET_RATE_PARENT, 0xec, 14, 1, CLK_DIVIDER_HIWORD_MASK, 0, },
 	{ HI3660_CLK_DIV_AOMM, "clk_div_aomm", "clk_aomm_andgt",
 	  CLK_SET_RATE_PARENT, 0x100, 7, 4, CLK_DIVIDER_HIWORD_MASK, 0, },
+	{ HI3660_CLK_DIV_ISP_SNCLK, "clk_isp_snclk_div", "clk_isp_snclk_fac",
+	  CLK_SET_RATE_PARENT, 0x108, 0, 2, CLK_DIVIDER_HIWORD_MASK, 0, },
 	{ HI3660_CLK_DIV_IOPERI, "clk_div_ioperi", "clk_mux_ioperi",
 	  CLK_SET_RATE_PARENT, 0x108, 11, 4, CLK_DIVIDER_HIWORD_MASK, 0, },
 };
