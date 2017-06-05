@@ -94,7 +94,7 @@ static int xhci_plat_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
-		return -ENODEV;
+		return irq;
 
         if(&(pdev->dev))
 		arch_xhci_setup_dma_ops(&(pdev->dev));
