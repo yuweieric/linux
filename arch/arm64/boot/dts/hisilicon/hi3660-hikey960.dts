@@ -29,12 +29,12 @@
 		serial2 = &uart2;
 		serial3 = &uart3;
 		serial4 = &uart4;
-		serial5 = &uart5;	/* console UART */
+		serial5 = &uart5;
 		serial6 = &uart6;
 	};
 
 	chosen {
-		stdout-path = "serial5:115200n8";
+		stdout-path = "serial6:115200n8";
 	};
 
 	memory@0 {
@@ -76,10 +76,6 @@
 	};
 
 	soc {
-		uart5: uart@fdf05000 {
-			status = "ok";
-		};
-
 		uart6: uart@fff32000 {
 			status = "ok";
 		};
