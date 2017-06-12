@@ -34,8 +34,10 @@
 #include "hifi_lpp.h"
 #include "hifi_om.h"
 #include "drv_mailbox_msg.h"
+#include <linux/hisi/hisi_rproc.h>
 #include <dsm/dsm_pub.h>
 #include <linux/hisi/rdr_pub.h>
+#include <linux/delay.h>
 
 /*lint -e773*/
 #define HI_DECLARE_SEMAPHORE(name) \
@@ -810,6 +812,242 @@ static const struct file_operations hifi_dspfaultinject_proc_ops = {
 	.write = hifi_dsp_fault_inject_store,
 };
 
+
+struct image_partition_table addr_remap_tables[] =
+{
+	{HIFI_RUN_DDR_REMAP_BASE, HIFI_RUN_DDR_REMAP_BASE + HIFI_RUN_SIZE, HIFI_RUN_SIZE, HIFI_RUN_LOCATION},
+	{HIFI_TCM_PHY_BEGIN_ADDR, HIFI_TCM_PHY_END_ADDR, HIFI_TCM_SIZE, HIFI_IMAGE_TCMBAK_LOCATION},
+	{HIFI_OCRAM_PHY_BEGIN_ADDR, HIFI_OCRAM_PHY_END_ADDR, HIFI_OCRAM_SIZE, HIFI_IMAGE_OCRAMBAK_LOCATION}
+};
+extern void *memcpy64(void *dst, const void *src, unsigned len);
+extern void *memcpy128(void *dst, const void *src, unsigned len);
+
+void *memcpy_aligned(void *_dst, const void *_src, unsigned len)
+{
+	unsigned char *dst = _dst;
+	const unsigned char *src = _src;
+	unsigned int length = len;
+	unsigned int cpy_len;
+
+	if (((unsigned long)dst % 16 == 0) && ((unsigned long)src % 16 == 0) && (length >= 16)) {
+		cpy_len = length&0xFFFFFFF0;
+		memcpy128(dst, src, cpy_len);
+		length = length % 16;
+		dst = dst + cpy_len;
+		src = src + cpy_len;
+
+		if(0 == length)
+			return _dst;
+	}
+
+	if (((unsigned long)dst % 8 == 0) && ((unsigned long)src % 8 == 0) && (length >= 8)) {
+		cpy_len = length & 0xFFFFFFF8;
+		memcpy64(dst, src, cpy_len);
+		length = length % 8;
+		dst = dst + cpy_len;
+		src = src + cpy_len;
+		if(0 == length)
+			return _dst;
+	}
+
+	if (((unsigned long)dst % 4 == 0) && ((unsigned long)src % 4 == 0)){
+		cpy_len = length >> 2;
+		while(cpy_len-- > 0) {
+			*(unsigned int *)dst = *(unsigned int *)src; //lint !e826
+			dst += 4;
+			src += 4;
+		}
+		length = length % 4;
+		if(0 == length)
+			return _dst;
+	}
+
+	while(length-- > 0){
+		*dst++ = *src++;
+	}
+
+	return _dst;
+}
+
+#define CMD_TO_LPM3_POWEROFF_HIFI ((0 << 24) | (16 << 16) | (3 << 8) | (1 << 0))
+
+static int notify_lpm3_power_off_hifi(void)
+{
+	int ret = 0;
+	unsigned int msg = CMD_TO_LPM3_POWEROFF_HIFI;
+
+	ret = RPROC_ASYNC_SEND(HISI_RPROC_LPM3_MBX17, &msg, 1);
+	if (ret)
+		loge("send message to lpm3 fail\n");
+
+	return ret;
+}
+
+#define HIFI_IMAGE_PATH "/data/hifi.img"
+static int read_hifi_img_file(char *img_buf)
+{
+	int fd = 0;
+	unsigned int img_size = 0;
+	unsigned int read_size = 0;
+	int ret = 0;
+	mm_segment_t old_fs;
+	struct drv_hifi_image_head *img_head = NULL;
+
+	if (!img_buf) {
+		loge("img buffer is null\n");
+		return -1;
+	}
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);/*lint !e501*/
+
+	fd = sys_open(HIFI_IMAGE_PATH, O_RDONLY, HIFI_OM_FILE_LIMIT);
+	if (fd < 0) {
+		loge("open %s failed, fd:%d\n", HIFI_IMAGE_PATH, fd);
+		set_fs(old_fs);
+		return -1;
+	}
+
+	img_head = (struct drv_hifi_image_head *)vzalloc(sizeof(struct drv_hifi_image_head) + 1);
+	if (!img_head) {
+		loge("alloc img buffer fail\n");
+		ret = -1;
+		goto end;
+	}
+
+	read_size = sys_read((unsigned int)fd, (char *)img_head, sizeof(struct drv_hifi_image_head));
+	if (read_size != sizeof(struct drv_hifi_image_head)) {
+		loge("read image head failed, read size:%u\n", read_size);
+		vfree(img_head);
+		ret = -1;
+		goto end;
+	}
+
+	img_size = img_head->image_size;
+	vfree(img_head);
+
+	if (sys_lseek((unsigned int)fd, 0, SEEK_SET)) {
+		loge("lseek fail\n");
+		ret = -1;
+		goto end;
+	}
+
+	read_size = sys_read((unsigned int)fd, (char *)img_buf, img_size);
+	if (read_size != img_size) {
+		loge("read total image file failed, read size:%u, image size:%u\n",
+			read_size, img_size);
+		ret = -1;
+		goto end;
+	}
+
+end:
+	sys_close(fd);
+	set_fs(old_fs);
+
+	return ret;
+}
+
+
+static int read_hifi_shared_addr(void)
+{
+	unsigned int *read_hifi_shared_addr = NULL;
+	int ret = 0;
+    loge(" %s():Enter \n",__func__);
+    //If we put 0x8ACC5000 addr kernel panic is observed at ioremap.c line no:58 ./arch/arm64/mm/ioremap.c.
+    read_hifi_shared_addr = ioremap_wc(0x8B300000,50);
+    if ( NULL == read_hifi_shared_addr ) {
+		loge(" %s(): read_hifi_shared_addr ioremap_wc failed\n", __func__);
+	}
+	else {
+        loge(" 0x8B300000:0x%x \n",readl(read_hifi_shared_addr) );
+		iounmap(read_hifi_shared_addr);
+		read_hifi_shared_addr = NULL;
+	}
+	loge(" %s():Exit\n",__func__);
+	return ret;
+}
+
+
+
+static int load_hifi_img_by_misc(void)
+{
+	unsigned int i = 0;
+	char *img_buf = NULL;
+	struct drv_hifi_image_head *hifi_img = NULL;
+
+	loge("load hifi image now\n");
+
+	if (notify_lpm3_power_off_hifi()) {
+		loge("power off hifi fail\n");
+		return -1;
+	}
+
+	img_buf = (char *)vzalloc(HIFI_IMAGE_SIZE);
+	if (!img_buf) {
+		loge("alloc img buffer fail\n");
+		return -1;
+	}
+
+	if (read_hifi_img_file(img_buf)) {
+		loge("read hifi img fail\n");
+		vfree(img_buf);
+		return -1;
+	}
+
+	hifi_img = (struct drv_hifi_image_head *)img_buf;
+	logi("sections_num:%u, image_size:%u\n", hifi_img->sections_num, hifi_img->image_size);
+
+	for (i = 0; i < hifi_img->sections_num; i++) {
+		unsigned int index = 0;
+		unsigned long remap_dest_addr = 0;
+		logi("sections_num:%u, i:%u\n",hifi_img->sections_num,i);
+		logi("des_addr:0x%x, load_attib:%u, size:%u, sn:%hu, src_offset:%x, type:%u\n", \
+						hifi_img->sections[i].des_addr,\
+						hifi_img->sections[i].load_attib,\
+						hifi_img->sections[i].size,\
+						hifi_img->sections[i].sn,\
+						hifi_img->sections[i].src_offset,\
+						hifi_img->sections[i].type);
+
+		remap_dest_addr = (unsigned long)hifi_img->sections[i].des_addr;
+		if (remap_dest_addr >= HIFI_OCRAM_PHY_BEGIN_ADDR && remap_dest_addr <= HIFI_OCRAM_PHY_END_ADDR) {
+			index = 2;
+		} else if (remap_dest_addr >= HIFI_TCM_PHY_BEGIN_ADDR && remap_dest_addr <= HIFI_TCM_PHY_END_ADDR) {
+			index = 1;
+		}
+		else { //(remap_addr >= HIFI_DDR_PHY_BEGIN_ADDR && remap_addr <= HIFI_DDR_PHY_END_ADDR)
+			index = 0;
+		}
+		remap_dest_addr -= addr_remap_tables[index].phy_addr_start - addr_remap_tables[index].remap_addr;
+
+		if (DRV_HIFI_IMAGE_SEC_TYPE_BSS != hifi_img->sections[i].type) {
+			unsigned int * iomap_dest_addr = NULL;
+
+			if ((unsigned char)DRV_HIFI_IMAGE_SEC_UNLOAD == hifi_img->sections[i].load_attib) {
+				logi("unload section\n");
+				continue;
+			}
+
+			iomap_dest_addr = (unsigned int*)ioremap(remap_dest_addr, hifi_img->sections[i].size);
+			if (!iomap_dest_addr) {
+				loge("ioremap failed\n");
+				vfree(img_buf);
+				return -1;
+			}
+			memcpy_aligned((void*)(iomap_dest_addr),
+				(void*)((char*)hifi_img + hifi_img->sections[i].src_offset),
+				hifi_img->sections[i].size);
+			iounmap(iomap_dest_addr);
+		}
+	}
+
+	vfree(img_buf);
+
+	return 0;
+}
+
+
+
 #define RESET_OPTION_LEN 100
 
 static ssize_t hifi_dsp_reset_option_show(struct file *file, char __user *buf,
@@ -821,7 +1059,11 @@ static ssize_t hifi_dsp_reset_option_show(struct file *file, char __user *buf,
 		loge("Input param buf is invalid\n");
 		return -EINVAL;
 	}
-
+	if (load_hifi_img_by_misc() == 0){
+		g_om_data.dsp_loaded = true;
+        read_hifi_shared_addr();
+        loge("g_om_data.dsp_loaded:%d\n",(int)g_om_data.dsp_loaded);
+    }
 	snprintf(reset_option, RESET_OPTION_LEN,
 		"reset_option: 0(reset mediasever) 1(reset system) current:%d.\n", g_om_data.reset_system);
 

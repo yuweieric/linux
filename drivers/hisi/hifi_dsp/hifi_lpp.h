@@ -181,6 +181,14 @@ extern "C" {
 
 #define HIFI_OCRAM_BASE_ADDR                    (0xE8000000)
 #define HIFI_TCM_BASE_ADDR                      (0xE8058000)
+#define HIFI_RUN_DDR_REMAP_BASE         (0xC0000000)
+#define HIFI_TCM_PHY_BEGIN_ADDR         (HIFI_TCM_BASE_ADDR)
+#define HIFI_TCM_PHY_END_ADDR           (HIFI_TCM_PHY_BEGIN_ADDR + HIFI_TCM_SIZE - 1)
+#define HIFI_TCM_SIZE                   (HIFI_RUN_ITCM_SIZE + HIFI_RUN_DTCM_SIZE)
+
+#define HIFI_OCRAM_PHY_BEGIN_ADDR       (HIFI_OCRAM_BASE_ADDR)
+#define HIFI_OCRAM_PHY_END_ADDR         (HIFI_OCRAM_PHY_BEGIN_ADDR + HIFI_OCRAM_SIZE - 1)
+#define HIFI_OCRAM_SIZE                 (HIFI_IMAGE_OCRAMBAK_SIZE)
 
 #define SIZE_PARAM_PRIV                         (206408) /*refer from function dsp_nv_init in dsp_soc_para_ctl.c  */
 #define HIFI_SYS_MEM_ADDR                       (HIFI_RUN_LOCATION)

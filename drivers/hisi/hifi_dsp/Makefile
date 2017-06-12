@@ -40,5 +40,6 @@ endif
 
 obj-$(CONFIG_HIFI_DSP_ONE_TRACK)	+= hifi_lpp.o
 obj-$(CONFIG_HIFI_DSP_ONE_TRACK)	+= hifi_om.o
+obj-$(CONFIG_HIFI_DSP_ONE_TRACK)	+= memcpy_opt.o
 
 obj-y	+= voice_proxy/
