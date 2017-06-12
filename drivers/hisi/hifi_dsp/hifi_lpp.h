@@ -54,26 +54,14 @@ extern "C" {
 #define HIFI_UNSEC_BASE_ADDR   (HISI_RESERVED_HIFI_DATA_PHYMEM_BASE)
 #endif
 
-/** 非安全区   3.5M **/
-/* |~0x34f00000~|~0x35032000~|~0x35132000~|~0x351b1000~|~0x351b2000~|~0x351c5000~|~~0x351c6000~~|~0x351c7000~|~0x351f9800~|~~0x35209800~~| */
-/* |~Music data~|~~~PCM data~|~~hifi uart~|~panic stack|~icc debug~~|~flag data ~|~DDR sec head~|~~~AP NV ~~~|~AP&HIFI MB~|~unsec reserve| */
-/* |~~~~~1.2M~~~|~~~~~1M~~~~~|~~~508k~~~~~|~~~~~~4k~~~~|~~~~76k~~~~~|~~~~~4k~~~~~|~~~~~~4k~~~~~~|~~~~202k~~~~|~~~~~64k~~~~|~~~~~~474k~~~~| */
-/* |~0x35031fff~|~0x35131fff~|~0x351b0fff~|~0x351b1fff~|~0x351c4fff~|~0x351c5fff~|~~0x351c6fff~~|~0x351f97ff~|~0x352097ff~|~~~0x3527ffff~| */
-
-/** 安全区 9.5M **/
-/* |~~~0x35280000~~~|~~~0x352b0000~~|~~~0x352ce000~~~|~~~0x356ce000~~~|~~~0x35700000~~~| */
-/* |~OCRAM img bak~~|~~TCM img bak~~|~~~~IMG bak~~~~~|~~~sec reserve~~|~~HIFI RUNNING~~| */
-/* |~~~~~~192K~~~~~~|~~~~~120k~~~~~~|~~~~~~~4M ~~~~~~|~~~~~200k~~~~~~~|~~~~~~~5M~~~~~~~| */
-/* |~~~0x352affff~~~|~~~0x352cdfff~~|~~~0x356cdfff~~~|~~~0x356fffff~~~|~~~0x35bfffff~~~| */
-
 /** for chicago only **/
-/** 非安全区 3.5M **/
-/* |~0x8B300000~|~0x8B432000~|~0x8B532000~|~0x8B5B1000~|~0x8B5B2000~|~0x8B5C5000~|~0x8B5C6000~|~0x8B5C7000~|~0x8B5F9800~|~~~0x8B609800~~~|~~~0x8B618800~~~|~~0x8B618880~~|~0x8B627880~|~~0x8B629880~~| */
-/* |~Music data~|~~~PCM data~|~~hifi uart~|~panic stack|~icc debug~~|~flag data ~|DDR sec head|~~~AP NV ~~~|~AP&HIFI MB~|~codec dma buff~|codec dma config|~soundtrigger~|~pcm upload~|~unsec reserve| */
-/* |~~~~~1.2M~~~|~~~~~1M~~~~~|~~~508k~~~~~|~~~~~~4k~~~~|~~~~76k~~~~~|~~~~~4k~~~~~|~~~~~4k~~~~~|~~~~202k~~~~|~~~~~64k~~~~|~~~~~~60k~~~~~~~|~~~~~~128b~~~~~~|~~~~~~60k~~~~~|~~~~~8k~~~~~|~~346K-128b~~~| */
-/* |~0x8B431fff~|~0x8B531fff~|~0x8B5B0fff~|~0x8B5B1fff~|~0x8B5C4fff~|~0x8B5C5fff~|~0x8B5C6fff~|~0x8B5F97ff~|~0x8B6097ff~|~~~0x8B6187FF~~~|~~~0x8B61887F~~~|~~0x8B62787F~~|~0x8B62987F~|~~0x8B67FFFF~~| */
+/**Non Secure 3.5M **/
+/* |0x8B300000|0x8B432000|0x8B532000|0x8B5B1000|0x8B5B2000|0x8B5C5000|0x8B5C6000|0x8B5C7000|0x8B5F9800|~~0x8B609800~~|~~0x8B618800~~|~0x8B618880~|0x8B627880|~0x8B629880~|0x8B62C880~~~| */
+/* |Music data|~~PCM data|~hifi uart|panicstack|icc debug~|flag data~|DDRsechead|~~AP NV ~~|AP&HIFIMB~|codec dma buff|codecdmaconfig|soundtrigger|pcm upload|~hikey share|unsec reserve| */
+/* |~~~~1.2M~~|~~~~1M~~~~|~~508k~~~~|~~~~~4k~~~|~~76k~~~~~|~~~4k~~~~~|~~~4k~~~~~|~~202k~~~~|~~~64k~~~~|~~~~60k~~~~~~~|~~~~128b~~~~~~|~~~~60k~~~~~|~~~8k~~~~~|~~~~~12k~~~~|~~362k~~~~~~~| */
+/* |0x8B431fff|0x8B531fff|0x8B5B0fff|0x8B5B1fff|0x8B5C4fff|0x8B5C5fff|0x8B5C6fff|0x8B5F97ff|0x8B6097ff|~~0x8B6187FF~~|~~0x8B61887F~~|~0x8B62787F~|0x8B62987F|0x8B62C87F~~|~~0x8B67FFFF~| */
 
-/** 安全区 9.5M **/
+/** Secure9.5M **/
 /* |~~~0x89200000~~~|~~~0x89800000~~~|~~~0x89830000~~|~~~0x89864000~~~| */
 /* |~~HIFI RUNNING~~|~OCRAM img bak~~|~~TCM img bak~~|~~~~IMG bak~~~~~| */
 /* |~~~~~~~6M~~~~~~~|~~~~~~192K~~~~~~|~~~~~208k~~~~~~|~~~~~~3.1M ~~~~~| */
@@ -90,6 +78,7 @@ extern "C" {
 #define HIFI_SEC_HEAD_SIZE                  (0x1000)
 #define HIFI_AP_NV_DATA_SIZE                (0x32800)
 #define HIFI_AP_MAILBOX_TOTAL_SIZE          (0x10000)
+#define HIFI_HIKEY_SHARE_SIZE               (0x1800 * 2)
 #define CODEC_DSP_OM_DMA_BUFFER_SIZE        (0xF000)
 #define CODEC_DSP_OM_DMA_CONFIG_SIZE        (0x80)
 #define CODEC_DSP_SOUNDTRIGGER_TOTAL_SIZE   (0xF000)
@@ -109,7 +98,8 @@ extern "C" {
 #define CODEC_DSP_OM_DMA_CONFIG_ADDR    (CODEC_DSP_OM_DMA_BUFFER_ADDR + CODEC_DSP_OM_DMA_BUFFER_SIZE)
 #define CODEC_DSP_SOUNDTRIGGER_BASE_ADDR (CODEC_DSP_OM_DMA_CONFIG_ADDR + CODEC_DSP_OM_DMA_CONFIG_SIZE)
 #define HIFI_PCM_UPLOAD_BUFFER_ADDR     (CODEC_DSP_SOUNDTRIGGER_BASE_ADDR + CODEC_DSP_SOUNDTRIGGER_TOTAL_SIZE)
-#define HIFI_UNSEC_RESERVE_ADDR         (HIFI_PCM_UPLOAD_BUFFER_ADDR + HIFI_PCM_UPLOAD_BUFFER_SIZE)
+#define HIFI_HIKEY_SHARE_MEM_ADDR       (HIFI_PCM_UPLOAD_BUFFER_ADDR + HIFI_PCM_UPLOAD_BUFFER_SIZE)
+#define HIFI_UNSEC_RESERVE_ADDR         (HIFI_HIKEY_SHARE_MEM_ADDR + HIFI_HIKEY_SHARE_SIZE)
 
 #define HIFI_OM_LOG_SIZE                (0xA000)
 #define HIFI_OM_LOG_ADDR                (DRV_DSP_UART_TO_MEM - HIFI_OM_LOG_SIZE)
