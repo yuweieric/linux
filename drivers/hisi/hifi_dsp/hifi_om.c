@@ -46,6 +46,7 @@ HI_DECLARE_SEMAPHORE(hifi_log_sema);
 /*lint +e773*/
 struct hifi_om_s g_om_data;
 static struct proc_dir_entry *hifi_debug_dir = NULL;
+static int read_hifi_shared_addr(void);
 #define MAX_LEVEL_STR_LEN 32
 #define UNCONFIRM_ADDR (0)
 static struct hifi_dsp_dump_info s_dsp_dump_info[] = {
@@ -886,7 +887,7 @@ static ssize_t hifi_dsp_fault_inject_store(struct file *file, const char __user 
 		loge("msg: %s send to hifi fail: %d\n", cmd_str, ret);
 		return ret;
 	}
-
+    read_hifi_shared_addr();
 	return size;
 }
 
@@ -1034,18 +1035,20 @@ end:
 
 static int read_hifi_shared_addr(void)
 {
-	unsigned int *read_hifi_shared_addr = NULL;
+	unsigned int *read_hifi_addr = NULL;
 	int ret = 0;
+    int i=0;
     loge(" %s():Enter \n",__func__);
     //If we put 0x8ACC5000 addr kernel panic is observed at ioremap.c line no:58 ./arch/arm64/mm/ioremap.c.
-    read_hifi_shared_addr = ioremap_wc(0x8B300000,50);
-    if ( NULL == read_hifi_shared_addr ) {
+    read_hifi_addr = ioremap_wc(HIFI_MUSIC_DATA_LOCATION,100);
+    if ( NULL == read_hifi_addr ) {
 		loge(" %s(): read_hifi_shared_addr ioremap_wc failed\n", __func__);
 	}
 	else {
-        loge(" 0x8B300000:0x%x \n",readl(read_hifi_shared_addr) );
-		iounmap(read_hifi_shared_addr);
-		read_hifi_shared_addr = NULL;
+        for(i=0;i<10;i++)
+            loge(" HIFI_MUSIC_DATA_LOCATION(0x8B300000)+%d:0x%x \n",i,readl(read_hifi_addr+i) );
+		iounmap(read_hifi_addr);
+		read_hifi_addr = NULL;
 	}
 	loge(" %s():Exit\n",__func__);
 	return ret;
@@ -1206,10 +1209,10 @@ static ssize_t hifi_dsp_dump_log_show(struct file *file, char __user *buf,
 
 	/*Do not create the /data/hisi_logs/running_trace/hifi_log/ folder*/
 	/*and files within when not in internal beta phase*/
-	if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
+/*	if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
 		loge("Not internal beta, Do not dump hifi\n");
 		return ret;
-	}
+	}*/
 
 	ret = simple_read_from_buffer(buf, size, ppos,
 			LOG_PATH_HIFI_LOG, (strlen(LOG_PATH_HIFI_LOG) + 1));
@@ -1344,10 +1347,10 @@ void hifi_dump_panic_log(void)
 {
 	/*Do not create the /data/hisi_logs/running_trace/hifi_log/ folder*/
 	/*and files within when not in internal beta phase*/
-	if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
+	/*if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
 		loge("Not beta, Do not dump hifi\n");
 		return;
-	}
+	}*/
 
 	if (!g_om_data.dsp_loaded) {
 		loge("hifi isn't loaded, errno: 0x%x .\n" , g_om_data.dsp_loaded_sign);
@@ -1393,10 +1396,10 @@ int hifi_dsp_dump_hifi(void __user *arg)
 
 	/*Do not create the /data/hisi_logs/running_trace/hifi_log/ folder*/
 	/*and files within when not in internal beta phase*/
-	if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
+/*	if (EDITION_INTERNAL_BETA != bbox_check_edition()) {
 		loge("Not internal beta, Do not dump hifi\n");
 		return 0;
-	}
+	}*/
 
 	if (copy_from_user(&err_type, arg, sizeof(err_type))) {
 		loge("copy_from_user fail, don't dump log\n");
