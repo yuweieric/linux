@@ -303,6 +303,7 @@ config VMD
 
 config PCIE_KIRIN
 	depends on OF && ARM64
+	depends on ARCH_HISI
 	select PCIE_DW
 	bool "Hisilicon Kirin960 PCIe controller"
 	help
