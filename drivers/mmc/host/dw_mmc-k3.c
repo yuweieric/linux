@@ -10,7 +10,6 @@
 
 #include <linux/bitops.h>
 #include <linux/clk.h>
-#include <linux/delay.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/dw_mmc.h>
@@ -19,7 +18,6 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
-#include <linux/reset.h>
 
 #include "dw_mmc.h"
 #include "dw_mmc-pltfm.h"
@@ -77,6 +75,7 @@ static unsigned long dw_mci_hi6220_caps[] = {
 	MMC_CAP_CMD23,
 	0
 };
+
 struct hs_timing {
 	int drv_phase;
 	int sam_dly;
@@ -265,43 +264,8 @@ static void dw_mci_hs_set_timing(struct dw_mci *host, int timing, int sam_phase)
 	mci_writel(host, GPIO, (unsigned int)reg_value | GPIO_CLK_ENABLE);
 }
 
-static void set_pin_pullup(void __iomem *addr, int pullup, int elec)
-{
-	unsigned int val;
-
-	val = readl(addr);
-	if (pullup) {
-		val &= ~PULL_DOWN;
-		val |= PULL_UP;
-	} else if (pullup == -1) {
-		val &= ~PULL_DOWN;
-		val &= ~PULL_UP;
-	} else {
-		val &= ~PULL_UP;
-		val |= PULL_DOWN;
-	}
-	val &= ~(0xF << 4);
-	val |= (elec << 4);
-	writel(val, addr);
-}
-
-static void config_sd_data_pullup(void)
-{
-	void __iomem *iocfg = ioremap(0xFF37E000, 0x1000);
-
-	set_pin_pullup(iocfg + 0x800, -1, 4); /* SD_CLK */
-	set_pin_pullup(iocfg + 0x804, 1, 4);  /* SD_CMD */
-	set_pin_pullup(iocfg + 0x808, 1, 4);  /* SD_DATA0 */
-	set_pin_pullup(iocfg + 0x80C, 1, 4);  /* SD_DATA1 */
-	set_pin_pullup(iocfg + 0x810, 1, 4);  /* SD_DATA2 */
-	set_pin_pullup(iocfg + 0x814, 1, 4);  /* SD_DATA3 */
-	iounmap(iocfg);
-}
-
 int dw_mci_hi3660_init(struct dw_mci *host)
 {
-	/* FIXME: temporary set sdcard data0~data3 pullup state */
-	config_sd_data_pullup();
 	/* set threshold to 512 bytes */
 	mci_writel(host, CDTHRCTL, 0x02000001);
 
@@ -309,11 +273,6 @@ int dw_mci_hi3660_init(struct dw_mci *host)
 	host->bus_hz /= (GENCLK_DIV + 1);
 
 	return 0;
-}
-
-static void dw_mci_hi3660_prepare_command(struct dw_mci *host, u32 *cmdr)
-{
-	*cmdr |= SDMMC_CMD_USE_HOLD_REG;
 }
 
 static int dw_mci_set_sel18(struct dw_mci *host, bool set)
@@ -481,7 +440,6 @@ static int dw_mci_hi3660_switch_voltage(struct mmc_host *mmc,
 
 static const struct dw_mci_drv_data hi3660_data = {
 	.init = dw_mci_hi3660_init,
-	.prepare_command = dw_mci_hi3660_prepare_command,
 	.set_ios = dw_mci_hi3660_set_ios,
 	.parse_dt = dw_mci_hi6220_parse_dt,
 	.execute_tuning = dw_mci_hi3660_execute_tuning,
