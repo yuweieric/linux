@@ -1221,7 +1221,7 @@ static struct kbase_va_region *kbase_mem_from_user_buffer(
 			reg->flags & KBASE_REG_GPU_WR, 0, NULL, NULL);
 #else
 	faulted_pages = get_user_pages(address, *va_pages,
-			reg->flags & KBASE_REG_GPU_WR, 0, NULL, NULL);
+			reg->flags & KBASE_REG_GPU_WR, NULL, NULL);
 #endif
 	up_read(&current->mm->mmap_sem);
 
