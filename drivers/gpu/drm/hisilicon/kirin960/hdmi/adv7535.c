@@ -1107,6 +1107,7 @@ static int adv7533_attach_dsi(struct adv7511 *adv7511)
 	struct device *dev = &adv7511->i2c_main->dev;
 	struct mipi_dsi_device *dsi;
 	struct mipi_dsi_host *host;
+	struct mipi_dsi_device_info info = { };
 	int ret;
 
 	host = of_find_mipi_dsi_host_by_node(adv7511->host_node);
@@ -1116,7 +1117,8 @@ static int adv7533_attach_dsi(struct adv7511 *adv7511)
 	}
 
 	/* can adv7533 virtual channel be non-zero? */
-	dsi = mipi_dsi_new_dummy(host, 0);
+	info.channel = 0;
+	dsi = mipi_dsi_device_register_full(host, &info);
 	if (IS_ERR(dsi)) {
 		dev_err(dev, "failed to create dummy dsi device\n");
 		ret = PTR_ERR(dsi);
@@ -1139,7 +1141,7 @@ static int adv7533_attach_dsi(struct adv7511 *adv7511)
 	return 0;
 
 err_dsi_attach:
-	mipi_dsi_unregister_device(dsi);
+	mipi_dsi_device_unregister(dsi);
 err_dsi_device:
 	return ret;
 }
@@ -1498,7 +1500,7 @@ static int adv7511_remove(struct i2c_client *i2c)
 
 	if (adv7511->type == ADV7533) {
 		mipi_dsi_detach(adv7511->dsi);
-		mipi_dsi_unregister_device(adv7511->dsi);
+		mipi_dsi_device_unregister(adv7511->dsi);
 		drm_bridge_remove(&adv7511->bridge);
 	}
 
