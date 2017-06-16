@@ -158,7 +158,7 @@ static int hi3660_register_stub_clk(struct platform_device *pdev,
 	init.name = kstrdup(clk_name, GFP_KERNEL);
 	init.ops = &hi3660_stub_clk_ops;
 	init.num_parents = 0;
-	init.flags = CLK_IS_ROOT;
+//	init.flags = CLK_IS_ROOT;
 
 	clk = devm_clk_register(dev, &stub_clk->hw);
 	if (IS_ERR(clk))
