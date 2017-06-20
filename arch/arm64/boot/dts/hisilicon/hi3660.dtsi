@@ -612,6 +612,7 @@
 				sel-gpio = <&gpio2 4 0>;
 				adi,dsi-lanes = <4>;
 				adi,disable-timing-generator;
+				#sound-dai-cells = <0>;
 
 				port {
 					adv7533_in: endpoint {
@@ -1321,7 +1322,8 @@
 			dmas = <&asp_dmac 18 &asp_dmac 19>;
 					dma-names = "rx", "tx";
 			status = "ok";
-			};
+			#sound-dai-cells = <0>;
+		};
 
 		asp_dmac: asp_dmac@E804B000 {
 			compatible = "hisilicon,hisi-pcm-asp-dma";
@@ -1337,13 +1339,32 @@
 			status = "ok";
 		};
 
+
+		sound {
+			compatible = "simple-audio-card";
+			simple-audio-card,name = "hikey-hdmi";
+			simple-audio-card,format = "i2s";
+
+			simple-audio-card,bitclock-master = <&sound_master>;
+			simple-audio-card,frame-master = <&sound_master>;
+
+			sound_master: simple-audio-card,cpu {
+				sound-dai = <&i2s0>;
+			};
+
+			simple-audio-card,codec {
+				sound-dai = <&adv7533>;
+			};
+		};
+
+/*
 		hisi_hdmi_card: hisi_hdmi_card {
 			compatible = "hisilicon,hisi-hdmi-audio-card";
 			reg = <0 0 0 0>;
 			sound-dai = <&i2s0>;
 			status = "ok";
 		};
-
+*/
 		tsensor: tsensor {
 			compatible = "hisilicon,thermal-hi3660";
 			mbox-names = "mbox-tx";
