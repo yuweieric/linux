@@ -43,7 +43,7 @@ static struct snd_soc_dai_link hisi_hdmi_dai_link = {
 
 	.cpu_dai_name ="e804f800.hisi_i2s",
 	.codec_name = "0.hisi_hdmi_card",
-	.be_id = 0,
+//	.be_id = 0,
 	.ops = &hdmi_ops,
 	.codec_dai_name = "hisi_hdmi_dai",
 	.platform_name = "e804f800.hisi_i2s",
