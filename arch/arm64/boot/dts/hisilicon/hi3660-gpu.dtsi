@@ -21,12 +21,11 @@
 
 		gpu_power_model: power_model {
 			compatible = "arm,mali-simple-power-model";
-			voltage = <700>;
-			frequency = <400>;
-			static-power = <112>;
-			dynamic-power = <980>;
+			static-coefficient = <350>;
+			dynamic-coefficient = <5000>;
 			ts = <48020 2120 (-50) 1>;
 			thermal-zone = "cls0";
+			temp-poll-interval-ms = <100>;
 		};
 	};
 };
