@@ -1273,7 +1273,7 @@
 
 			cls0: cls0 {
 				polling-delay = <1000>;
-				polling-delay-passive = <100>;
+				polling-delay-passive = <25>;
 				sustainable-power = <4000>;
 
 				/* sensor ID */
