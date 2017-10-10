@@ -117,6 +117,16 @@
 				};
 			};
 		};
+		hardware_cfg_argonkey {
+			overlay_0 {
+				fragment@0 {
+					target-path="/soc/spi@f7106000/argonkey@0";
+					__overlay__ {
+						status = "ok";
+					};
+				};
+			};
+		};
 		hardware_cfg_disable_bt {
 			overlay_0 {
 				fragment@0 {
@@ -676,6 +686,42 @@
 		sensorhub,num-shared-flash-banks = <2>;
 		sensorhub,shared-flash-banks =	<6 0x08040000 0x20000>,
 						<7 0x08060000 0x20000>;
+		status = "disabled";
+	};
+
+	argonkey@0 {
+		compatible = "nanohub";
+		reg = <0>;
+		pl022,com-mode = <2>;
+		pl022,rx-level-trig = <1>;
+		spi-max-frequency = <7500000>;
+
+		interrupt-parent = <&gpio2>;
+		interrupts = <0 0x2>;
+		sensorhub,irq1-gpio = <&gpio2 0 0>;
+		sensorhub,irq2-gpio = <&gpio10 2 0>;
+		sensorhub,wakeup-gpio = <&gpio9 1 0>;
+		sensorhub,spi-cs-gpio = <&gpio6 7 0>;
+		sensorhub,nreset-gpio = <&gpio2 3 0>;
+		sensorhub,boot0-gpio = <&gpio2 7 0>;
+		sensorhub,bl-addr = <0x08000000>;
+		sensorhub,kernel-addr = <0x0800C000>;
+		sensorhub,num-flash-banks = <4>;
+		sensorhub,flash-banks =
+			<0 0x08000000 0x04000>,
+			<3 0x0800C000 0x04000>,
+			<4 0x08010000 0x10000>,
+			<5 0x08020000 0x20000>;
+		sensorhub,shared-addr = <0x08040000>;
+		sensorhub,num-shared-flash-banks = <6>;
+		sensorhub,shared-flash-banks =
+			<6 0x08040000 0x20000>,
+			<7 0x08060000 0x20000>,
+			<8 0x08080000 0x20000>,
+			<9 0x080A0000 0x20000>,
+			<10 0x080C0000 0x20000>,
+			<11 0x080E0000 0x20000>;
+
 		status = "disabled";
 	};
 };
