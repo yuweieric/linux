@@ -1274,7 +1274,7 @@
 			cls0: cls0 {
 				polling-delay = <1000>;
 				polling-delay-passive = <100>;
-				sustainable-power = <4500>;
+				sustainable-power = <4000>;
 
 				/* sensor ID */
 				thermal-sensors = <&tsensor 4>;
