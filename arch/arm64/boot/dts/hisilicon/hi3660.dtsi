@@ -1100,7 +1100,7 @@
 		};
 
 		pcie@f4000000 {
-			compatible = "hisilicon,kirin960-pcie";
+			compatible = "hisilicon,kirin-pcie";
 			reg = <0x0 0xf4000000 0x0 0x1000>,
 			      <0x0 0xff3fe000 0x0 0x1000>,
 			      <0x0 0xf3f20000 0x0 0x40000>,
@@ -1132,7 +1132,7 @@
 			clock-names = "pcie_phy_ref", "pcie_aux",
 				      "pcie_apb_phy", "pcie_apb_sys",
 				      "pcie_aclk";
-			reset-gpios = <&gpio11 1 0 >;
+			reset-gpio = <&gpio11 1 0 >;
 		};
 
 		/* SD */
