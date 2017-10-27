@@ -6,6 +6,7 @@
 		interrupts = <0 258 4 0 259 4 0 260 4>;
 		interrupt-names = "JOB", "MMU", "GPU";
 		clocks = <&stub_clock HI3660_CLK_STUB_GPU>;
+		clock-names = "clk_mali";
 		operating-points = <
 			/* <frequency> <voltage>*/
 			178000  650000
