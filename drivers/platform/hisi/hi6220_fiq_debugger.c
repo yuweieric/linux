@@ -27,12 +27,17 @@
 #include <linux/stacktrace.h>
 #include <linux/uaccess.h>
 #include <linux/amba/serial.h>
+#include <linux/trusty/trusty.h>
+#include <linux/trusty/smcall.h>
 
 #include "../../staging/android/fiq_debugger/fiq_debugger.h"
 
 struct hi6220_fiq_debugger {
 	struct fiq_debugger_pdata pdata;
 	void __iomem *debug_port_base;
+	struct device *trusty_dev;
+	int lfiq;
+	int tfiq;
 };
 
 static inline void uart_write(struct hi6220_fiq_debugger *t,
@@ -106,10 +111,33 @@ static int debug_resume(struct platform_device *pdev)
 	return debug_port_init(pdev);
 }
 
+static void trusty_fiq_enable(struct platform_device *pdev,
+			      unsigned int fiq, bool enable)
+{
+	int ret;
+	struct hi6220_fiq_debugger *t;
+
+	t = container_of(dev_get_platdata(&pdev->dev), typeof(*t), pdata);
+
+	if (fiq != t->lfiq) {
+		dev_err(&pdev->dev, "unexpected virtual fiq, %d != %d\n",
+			fiq, t->lfiq);
+		return;
+	}
+
+	ret = trusty_fast_call32(t->trusty_dev, SMC_FC_REQUEST_FIQ,
+				 t->tfiq, enable, 0);
+	if (ret)
+		dev_err(&pdev->dev, "SMC_FC_REQUEST_FIQ failed: %d\n", ret);
+}
+
 static int hi6220_fiq_debugger_id;
 
-static int __hi6220_serial_debug_init(unsigned int base, int fiq, int irq,
-			   struct clk *clk, int signal_irq, int wakeup_irq)
+static int __hi6220_serial_debug_init(unsigned int base,
+				      int lfiq, int tfiq, int irq,
+				      struct clk *clk,
+				      int signal_irq, int wakeup_irq,
+				      struct device *trusty_dev)
 {
 	struct hi6220_fiq_debugger *t;
 	struct platform_device *pdev;
@@ -130,6 +158,10 @@ static int __hi6220_serial_debug_init(unsigned int base, int fiq, int irq,
 	t->pdata.uart_dev_suspend = debug_suspend;
 	t->pdata.uart_dev_resume = debug_resume;
 
+	if (trusty_dev)
+		t->pdata.fiq_enable = trusty_fiq_enable;
+	t->trusty_dev = trusty_dev;
+
 	t->debug_port_base = ioremap(base, PAGE_SIZE);
 	if (!t->debug_port_base) {
 		pr_err("Failed to ioremap for fiq debugger\n");
@@ -148,11 +180,13 @@ static int __hi6220_serial_debug_init(unsigned int base, int fiq, int irq,
 		goto out3;
 	};
 
-	if (fiq >= 0) {
+	if (lfiq >= 0) {
 		res[0].flags = IORESOURCE_IRQ;
-		res[0].start = fiq;
-		res[0].end = fiq;
+		res[0].start = lfiq;
+		res[0].end = lfiq;
 		res[0].name = "fiq";
+		t->lfiq = lfiq;
+		t->tfiq = tfiq;
 	} else {
 		res[0].flags = IORESOURCE_IRQ;
 		res[0].start = irq;
@@ -201,19 +235,33 @@ out1:
 	return ret;
 }
 
-int hi6220_serial_debug_init_irq_mode(unsigned int base, int irq,
-			struct clk *clk, int signal_irq, int wakeup_irq)
-{
-	return __hi6220_serial_debug_init(base, -1, irq, clk, signal_irq,
-					  wakeup_irq);
-}
+#define HI6220_SERIAL_DEBUG_MODE_IRQ ((void *)0)
+#define HI6220_SERIAL_DEBUG_MODE_FIQ ((void *)1)
+
+static const struct of_device_id hi6220_serial_debug_match[] = {
+	{
+		.compatible = "android,irq-hi6220-uart",
+		.data = HI6220_SERIAL_DEBUG_MODE_IRQ,
+	},
+	{
+		.compatible = "android,fiq-hi6220-uart",
+		.data = HI6220_SERIAL_DEBUG_MODE_FIQ,
+	},
+	{}
+};
+MODULE_DEVICE_TABLE(of, hi6220_serial_debug_match);
 
 static int hi6220_serial_debug_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	int fiq;
+	int lfiq = -1;
+	int tfiq = -1;
+	int irq = -1;
 	int signal_irq;
 	int wakeup_irq;
+	const struct of_device_id *of_id;
+	struct device *trusty_dev = NULL;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -239,19 +287,23 @@ static int hi6220_serial_debug_probe(struct platform_device *pdev)
 		wakeup_irq = -1;
 	}
 
-	return hi6220_serial_debug_init_irq_mode(res->start, fiq, NULL,
-						 signal_irq, wakeup_irq);
-}
+	of_id = of_match_node(hi6220_serial_debug_match, pdev->dev.of_node);
+	if (of_id->data == HI6220_SERIAL_DEBUG_MODE_FIQ) {
+		trusty_dev = pdev->dev.parent->parent;
+		lfiq = fiq;
+		tfiq = irqd_to_hwirq(irq_get_irq_data(fiq));
+	} else {
+		irq = fiq;
+	}
 
-static const struct of_device_id hi6220_serial_debug_match[] = {
-	{ .compatible = "android,irq-hi6220-uart", },
-	{}
-};
+	return __hi6220_serial_debug_init(res->start, lfiq, tfiq, irq, NULL,
+					  signal_irq, wakeup_irq, trusty_dev);
+}
 
 static struct platform_driver hi6220_serial_debug_driver = {
 	.probe		= hi6220_serial_debug_probe,
 	.driver		= {
-		.name	= "hi6220-irq-debug",
+		.name	= "hi6220-serial-debug",
 		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(hi6220_serial_debug_match),
 	},
