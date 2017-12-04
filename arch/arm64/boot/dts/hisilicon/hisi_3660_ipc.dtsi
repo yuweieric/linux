@@ -205,15 +205,6 @@
 			used = <0>;
 			timeout = <300>;
 		};
-		mailbox-10 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <2>;
-			index = <10>;
-			used = <1>;
-			timeout = <300>;
-		};
 
 		mailbox-11 {
 			compatible = "HiIPCV230,tx-mailbox-fast";
@@ -235,19 +226,6 @@
 			timeout = <300>;
 		};
 
-		mailbox-13 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <3>;
-			index = <13>;
-			used = <1>;
-			timeout = <300>;
-			fifo_size = <8>;
-			sched_priority = <1>;
-			sched_policy = <1>;
-		};
-
 		mailbox-14 {
 			compatible = "HiIPCV230,tx-mailbox-fast";
 			func = <1 1 0>;
@@ -265,16 +243,6 @@
 			des_bit = <3>;
 			index = <15>;
 			used = <0>;
-			timeout = <300>;
-		};
-
-		mailbox-16 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <3>;
-			index = <16>;
-			used = <1>;
 			timeout = <300>;
 		};
 
@@ -355,15 +323,6 @@
 			used = <0>;
 			timeout = <300>;
 		};
-		mailbox-25 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <7>;
-			index = <25>;
-			used = <1>;
-			timeout = <300>;
-		};
 
 		mailbox-26 {
 			compatible = "HiIPCV230,tx-mailbox-fast";
@@ -372,39 +331,6 @@
 			des_bit = <7>;
 			index = <26>;
 			used = <0>;
-			timeout = <300>;
-		};
-
-		mailbox-27 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <3>;
-			index = <27>;
-			used = <1>;
-			timeout = <300>;
-		};
-
-		mailbox-28 {
-			compatible = "HiIPCV230,tx-mailbox-fast";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <3>;
-			index = <28>;
-			used = <1>;
-			timeout = <300>;
-		};
-		/* The mailbox-29 and mailbox-30  is comm-mailbox in SOC,
-		 * but fast-mailbox in software, define the src and des here,
-		 * if need use, add it below
-		 */
-		mailbox-29 {
-			compatible = "HiIPCV230,mailbox-comm";
-			func = <1 1 0>;
-			src_bit = <0>;
-			des_bit = <4>;
-			index = <29>;
-			used = <1>;
 			timeout = <300>;
 		};
 
