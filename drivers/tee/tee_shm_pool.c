@@ -90,6 +90,7 @@ static int pool_res_mem_mgr_init(struct tee_shm_pool_mgr *mgr,
 /**
  * tee_shm_pool_alloc_res_mem() - Create a shared memory pool from reserved
  * memory range
+ * @dev:	Device allocating the pool
  * @priv_info:	Information for driver private shared memory pool
  * @dmabuf_info: Information for dma-buf shared memory pool
  *
@@ -101,7 +102,8 @@ static int pool_res_mem_mgr_init(struct tee_shm_pool_mgr *mgr,
  * @returns pointer to a 'struct tee_shm_pool' or an ERR_PTR on failure.
  */
 struct tee_shm_pool *
-tee_shm_pool_alloc_res_mem(struct tee_shm_pool_mem_info *priv_info,
+tee_shm_pool_alloc_res_mem(struct device *dev,
+			   struct tee_shm_pool_mem_info *priv_info,
 			   struct tee_shm_pool_mem_info *dmabuf_info)
 {
 	struct tee_shm_pool *pool = NULL;
@@ -133,7 +135,7 @@ tee_shm_pool_alloc_res_mem(struct tee_shm_pool_mem_info *priv_info,
 	return pool;
 err:
 	if (ret == -ENOMEM)
-		pr_err("%s: can't allocate memory for res_mem shared memory pool\n", __func__);
+		dev_err(dev, "can't allocate memory for res_mem shared memory pool\n");
 	if (pool && pool->private_mgr.private_data)
 		gen_pool_destroy(pool->private_mgr.private_data);
 	kfree(pool);
