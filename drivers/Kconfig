@@ -208,6 +208,4 @@ source "drivers/hisi/Kconfig"
 
 source "drivers/fpga/Kconfig"
 
-source "drivers/tee/Kconfig"
-
 endmenu
