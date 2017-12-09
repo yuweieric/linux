@@ -111,6 +111,7 @@ struct k3_dma_dev {
 	struct dma_pool		*pool;
 	u32			dma_channels;
 	u32			dma_requests;
+	u32			dma_min_chan;
 	unsigned int		irq;
 };
 
@@ -306,7 +307,7 @@ static void k3_dma_tasklet(unsigned long arg)
 
 	/* check new channel request in d->chan_pending */
 	spin_lock_irq(&d->lock);
-	for (pch = 0; pch < d->dma_channels; pch++) {
+	for (pch = d->dma_min_chan; pch < d->dma_channels; pch++) {
 		p = &d->phy[pch];
 
 		if (p->vchan == NULL && !list_empty(&d->chan_pending)) {
@@ -323,7 +324,7 @@ static void k3_dma_tasklet(unsigned long arg)
 	}
 	spin_unlock_irq(&d->lock);
 
-	for (pch = 0; pch < d->dma_channels; pch++) {
+	for (pch = d->dma_min_chan; pch < d->dma_channels; pch++) {
 		if (pch_alloc & (1 << pch)) {
 			p = &d->phy[pch];
 			c = p->vchan;
@@ -815,6 +816,12 @@ static int k3_dma_probe(struct platform_device *op)
 				"dma-channels", &d->dma_channels);
 		of_property_read_u32((&op->dev)->of_node,
 				"dma-requests", &d->dma_requests);
+		ret = of_property_read_u32((&op->dev)->of_node,
+				"dma-min-chan", &d->dma_min_chan);
+		if (ret) {
+			dev_info(&op->dev, "doesn't have dma-min-chan property!\n");
+			d->dma_min_chan = 0;
+		}
 	}
 
 	d->clk = devm_clk_get(&op->dev, NULL);
@@ -839,11 +846,12 @@ static int k3_dma_probe(struct platform_device *op)
 
 	/* init phy channel */
 	d->phy = devm_kzalloc(&op->dev,
-		d->dma_channels * sizeof(struct k3_dma_phy), GFP_KERNEL);
+		(d->dma_channels - d->dma_min_chan) * sizeof(struct k3_dma_phy),
+			GFP_KERNEL);
 	if (d->phy == NULL)
 		return -ENOMEM;
 
-	for (i = 0; i < d->dma_channels; i++) {
+	for (i = d->dma_min_chan; i < d->dma_channels; i++) {
 		struct k3_dma_phy *p = &d->phy[i];
 
 		p->idx = i;
