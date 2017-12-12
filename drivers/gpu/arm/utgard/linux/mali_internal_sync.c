@@ -539,7 +539,7 @@ static bool mali_internal_fence_signaled(struct fence *fence)
 
 	ret = parent->ops->has_signaled(sync_pt);
 	if (0 > ret)
-		fence->status = ret;
+		fence->error = ret;
 	return ret;
 }
 
@@ -757,7 +757,7 @@ static long mali_internal_sync_fence_ioctl_fence_info(struct mali_internal_sync_
 		strlcpy(sync_pt_info->driver_name, base->ops->get_driver_name(base), sizeof(sync_pt_info->driver_name));
 
 		if (fence_is_signaled(base))
-			sync_pt_info->status = base->status >= 0 ? 1 : base->status;
+			sync_pt_info->status = base->error >= 0 ? 1 : base->error;
 		else
 			sync_pt_info->status = 0;
 
