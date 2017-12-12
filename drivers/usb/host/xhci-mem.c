@@ -996,8 +996,9 @@ void xhci_free_virt_devices_depth_first(struct xhci_hcd *xhci, int slot_id)
 	if (!vdev)
 		return;
 
-	if (WARN_ON(vdev->real_port == 0)) {
-		xhci_warn(xhci, "Bad vdev->real_port\n");
+	if (vdev->real_port == 0 ||
+			vdev->real_port > HCS_MAX_PORTS(xhci->hcs_params1)) {
+		xhci_dbg(xhci, "Bad vdev->real_port.\n");
 		goto out;
 	}
 
