@@ -18,7 +18,6 @@ energy-costs {
 		idle-cost-data = <
 			18
 			18
-			3
 			0
 			0
 		>;
@@ -47,7 +46,6 @@ energy-costs {
 			1024  433
 		>;
 		idle-cost-data = <
-			102
 			102
 			102
 			102
