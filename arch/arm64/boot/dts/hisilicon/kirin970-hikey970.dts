@@ -9,14 +9,11 @@
 /dts-v1/;
 
 #include "kirin970.dtsi"
-#include "kirin970-gpu.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include "kirin970_spmi.dtsi"
 #include "hisi_6421v600_pmic_spmi.dtsi"
-#include "kirin970-drm.dtsi"
-#include "kirin970-ion.dtsi"
-#include "kirin970_ipc.dtsi"
+
 / {
 	model = "HiKey970";
 	compatible = "Hisilicon,kirin970-hikey970", "Hisilicon,kirin970";

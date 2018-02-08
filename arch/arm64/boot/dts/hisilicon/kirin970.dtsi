@@ -574,7 +574,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-
+		/*
 		thermal-zones {
 
 			cls0: cls0 {
@@ -582,7 +582,6 @@
 				polling-delay-passive = <25>;
 				sustainable-power = <4000>;
 
-				/* sensor ID */
 				thermal-sensors = <&tsensor 1>;
 
 				trips {
@@ -618,7 +617,7 @@
 				};
 			};
 		};
-
+		*/
 		gpio0: gpio@e8a0b000 {
 			compatible = "arm,pl061", "arm,primecell", "arm,primecell0";
 			reg = <0 0xe8a0b000 0 0x1000>;
@@ -1238,7 +1237,7 @@
 			resets = <&iomcu_rst 0x20 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c1_pmx_func &i2c1_cfg_func>;
-			status = "ok";
+			status = "disabled";
 
 			rt1711@4e {
 				compatible = "richtek,rt1711";
@@ -1343,8 +1342,8 @@
 			resets = <&crg_rst 0x78 27>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c4_pmx_func &i2c4_cfg_func>;
-			status = "ok";
-
+			status = "disabled";
+			/*
 			adv7533: adv7533@39 {
 				status = "ok";
 				compatible = "adi,adv7533";
@@ -1365,6 +1364,7 @@
 					};
 				};
 			};
+			*/
 		};
 
 		hisi_pd: pd_dpm {
@@ -1468,7 +1468,7 @@
 			interrupt-names = "asp_dma_irq";
 			status = "ok";
 		};
-
+		/*
 		sound {
 			compatible = "simple-audio-card";
 			simple-audio-card,name = "hikey-hdmi";
@@ -1485,5 +1485,6 @@
 				sound-dai = <&adv7533>;
 			};
 		};
+		*/
 	};
 };
