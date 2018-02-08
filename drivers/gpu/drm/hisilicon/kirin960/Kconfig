@@ -37,3 +37,16 @@ config DRM_PANEL_HIKEY960_NTE300NTS
 	help
 		Say Y here if you want to enable LCD panel driver for Hikey960 boadr.
 		Current support panel: NTE300NTS(1920X1200)
+
+config HISI_FB_970
+	tristate "DRM Support for Hisilicon Kirin970 series SoCs Platform"
+	depends on DRM && OF && ARM64
+	depends on DRM_MIPI_DSI
+	help
+	  Choose this option if you have a hisilicon Kirin chipsets(kirin970).
+	  If M is selected the module will be called kirin-drm.
+
+config HDMI_ADV7511_AUDIO
+	tristate "HDMI Support ADV7511 audio"
+	help
+	  Choose this option to support HDMI ADV7511 audio.

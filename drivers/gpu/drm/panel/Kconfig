@@ -81,4 +81,12 @@ config DRM_PANEL_SHARP_LS043T1LE01
 	  Say Y here if you want to enable support for Sharp LS043T1LE01 qHD
 	  (540x960) DSI panel as found on the Qualcomm APQ8074 Dragonboard
 
+config DRM_PANEL_HIKEY960_NTE300NTS
+	tristate "Hikey960 NTE300NTS video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	help
+	  Say Y here if you want to enable LCD panel driver for Hikey960&Hikey970 boadr.
+	  Current support panel: NTE300NTS(1920X1200)
+
 endmenu
