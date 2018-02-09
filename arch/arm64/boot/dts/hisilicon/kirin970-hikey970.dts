@@ -138,10 +138,10 @@
 	leds {
 		compatible = "gpio-leds";
 
-		user_led2 {
-			label = "user_led2";
-			/* gpio_151_user_led2 */
-			gpios = <&gpio20 7 0>;
+		sdcard_active_led {
+			label = "sdcard_active";
+			/* gpio_192_user_led2 */
+			gpios = <&gpio24 0 0>;
 			linux,default-trigger = "mmc0";
 		};
 
