@@ -40,6 +40,7 @@
 #include <linux/hisi/log/hisi_log.h>
 #include <linux/hisi/usb/hisi_pd_dev.h>
 #include <linux/hisi/usb/pd/richtek/tcpm.h>
+#include <linux/hisi/usb/hisi_hikey_usb.h>
 
 struct pd_dpm_info *g_pd_di;
 static bool g_pd_cc_orientation;
@@ -157,10 +158,12 @@ void pd_dpm_report_pd_source_vbus(struct pd_dpm_info *di, void *data)
 	if (vbus_state->mv == 0) {
 		hisilog_info("%s : Disable\n", __func__);
 		pd_dpm_vbus_notifier_call(g_pd_di, CHARGER_TYPE_NONE, data);
+		gpio_hub_typec_power_off();
 	} else {
 		di->pd_source_vbus = true;
 		hisilog_info("%s : Source %d mV, %d mA\n",
 			     __func__, vbus_state->mv, vbus_state->ma);
+		gpio_hub_typec_power_on();
 		pd_dpm_vbus_notifier_call(g_pd_di, PLEASE_PROVIDE_POWER, data);
 	}
 	mutex_unlock(&di->sink_vbus_lock);
@@ -290,6 +293,9 @@ static inline void pd_dpm_report_device_attach(void)
 		hisilog_info("%s, in pd process, report charger connect event\n",
 			     __func__);
 	}
+	gpio_hub_power_off();
+	gpio_hub_typec_power_off();
+	gpio_hub_switch_to_typec();
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB_HOST, false);
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB, true);
 }
@@ -297,6 +303,8 @@ static inline void pd_dpm_report_device_attach(void)
 static inline void pd_dpm_report_host_attach(void)
 {
 	hisilog_info("%s \r\n", __func__);
+	gpio_hub_switch_to_typec();
+	gpio_hub_typec_power_on();
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB, false);
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB_HOST, true);
 }
@@ -308,6 +316,9 @@ static inline void pd_dpm_report_device_detach(void)
 		hisilog_info("%s, in pd process, report charger connect event\n",
 			     __func__);
 	}
+	gpio_hub_switch_to_hub();
+	gpio_hub_typec_power_off();
+	gpio_hub_power_on();
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB, false);
 	extcon_set_state_sync(g_pd_di->edev, EXTCON_USB_HOST, true);
 	pd_dpm_vbus_notifier_call(g_pd_di, CHARGER_TYPE_NONE, NULL);
@@ -316,6 +327,8 @@ static inline void pd_dpm_report_device_detach(void)
 static inline void pd_dpm_report_host_detach(void)
 {
 	hisilog_info("%s \r\n", __func__);
+	gpio_hub_switch_to_hub();
+	gpio_hub_typec_power_off();
 }
 
 static void pd_dpm_report_attach(int new_state)
@@ -412,10 +425,15 @@ int pd_dpm_handle_pe_event(unsigned long event, void *data)
 				mutex_unlock(&g_pd_di->sink_vbus_lock);
 				usb_event = PD_DPM_USB_TYPEC_DETACHED;
 				break;
+			case PD_DPM_TYPEC_ATTACHED_DBGACC_SNK:
+			case PD_DPM_TYPEC_ATTACHED_CUSTOM_SRC:
+				attach_event = true;
+				usb_event = PD_DPM_USB_TYPEC_DEVICE_ATTACHED;
+				break;
 
 			default:
-				hisilog_info("%s can not detect typec state\r\n",
-					     __func__);
+				hisilog_info("%s can not detect typec state %d\r\n",
+					     __func__, typec_state->new_state);
 				break;
 			}
 			pd_dpm_set_typec_state(usb_event);
@@ -560,6 +578,10 @@ static int pd_dpm_probe(struct platform_device *pdev)
 		return ret;
 	}
 	extcon_set_state(g_pd_di->edev, EXTCON_USB_HOST, true);
+
+	gpio_hub_power_on();
+	gpio_hub_typec_power_off();
+	gpio_hub_switch_to_hub();
 
 	hisilog_info("%s ++++\r\n\r\n", __func__);
 
