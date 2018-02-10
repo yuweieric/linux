@@ -113,11 +113,25 @@ static void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode)
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 }
 
+static void dwc3_gctl_core_soft_reset(struct dwc3 *dwc)
+{
+	int reg;
+
+	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg |= (DWC3_GCTL_CORESOFTRESET);
+	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+
+	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg &= ~(DWC3_GCTL_CORESOFTRESET);
+	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+}
+
 static void __dwc3_set_mode(struct work_struct *work)
 {
 	struct dwc3 *dwc = work_to_dwc(work);
 	unsigned long flags;
 	int ret;
+	int reg;
 
 	if (!dwc->desired_dr_role)
 		return;
@@ -153,8 +167,17 @@ static void __dwc3_set_mode(struct work_struct *work)
 		ret = dwc3_host_init(dwc);
 		if (ret)
 			dev_err(dwc->dev, "failed to initialize host\n");
+		else if (dwc->dis_split_quirk) {
+			reg = dwc3_readl(dwc->regs, DWC3_GUCTL3);
+			reg |= DWC3_GUCTL3_SPLITDISABLE;
+			dwc3_writel(dwc->regs, DWC3_GUCTL3, reg);
+		}
 		break;
 	case DWC3_GCTL_PRTCAP_DEVICE:
+		/* Execute a GCTL Core Soft Reset when switch mode */
+		if (dwc->gctl_reset_quirk)
+			dwc3_gctl_core_soft_reset(dwc);
+
 		dwc3_event_buffers_setup(dwc);
 		ret = dwc3_gadget_init(dwc);
 		if (ret)
@@ -1033,6 +1056,11 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	device_property_read_u32(dev, "snps,quirk-frame-length-adjustment",
 				 &dwc->fladj);
 
+	dwc->dis_split_quirk = device_property_read_bool(dev,
+				"snps,dis-split-quirk");
+	dwc->gctl_reset_quirk = device_property_read_bool(dev,
+				"snps,gctl-reset-quirk");
+
 	dwc->lpm_nyet_threshold = lpm_nyet_threshold;
 	dwc->tx_de_emphasis = tx_de_emphasis;
 
@@ -1197,7 +1225,7 @@ static int dwc3_probe(struct platform_device *pdev)
 	return 0;
 
 err5:
-	dwc3_event_buffers_cleanup(dwc);
+	dwc3_core_exit(dwc);
 
 err4:
 	dwc3_free_scratch_buffers(dwc);
@@ -1291,8 +1319,11 @@ static int dwc3_resume_common(struct dwc3 *dwc)
 		spin_lock_irqsave(&dwc->lock, flags);
 		dwc3_gadget_resume(dwc);
 		spin_unlock_irqrestore(&dwc->lock, flags);
+		if (dwc->current_dr_role != DWC3_GCTL_PRTCAP_HOST)
+			break;
 		/* FALLTHROUGH */
 	case USB_DR_MODE_HOST:
+		dwc3_set_prtcap(dwc, DWC3_GCTL_PRTCAP_HOST);
 	default:
 		/* do nothing */
 		break;
@@ -1418,10 +1449,25 @@ static int dwc3_resume(struct device *dev)
 
 	return 0;
 }
+
+static void dwc3_complete(struct device *dev)
+{
+	struct dwc3	*dwc = dev_get_drvdata(dev);
+	u32		reg;
+
+	if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST &&
+			dwc->dis_split_quirk) {
+		dev_dbg(dwc->dev, "set DWC3_GUCTL3_SPLITDISABLE\n");
+		reg = dwc3_readl(dwc->regs, DWC3_GUCTL3);
+		reg |= DWC3_GUCTL3_SPLITDISABLE;
+		dwc3_writel(dwc->regs, DWC3_GUCTL3, reg);
+	}
+}
 #endif /* CONFIG_PM_SLEEP */
 
 static const struct dev_pm_ops dwc3_dev_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(dwc3_suspend, dwc3_resume)
+	.complete = dwc3_complete,
 	SET_RUNTIME_PM_OPS(dwc3_runtime_suspend, dwc3_runtime_resume,
 			dwc3_runtime_idle)
 };
