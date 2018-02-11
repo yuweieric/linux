@@ -14,6 +14,7 @@
 #include "kirin970_spmi.dtsi"
 #include "hisi_6421v600_pmic_spmi.dtsi"
 
+#include "kirin970-ion.dtsi"
 / {
 	model = "HiKey970";
 	compatible = "Hisilicon,kirin970-hikey970", "Hisilicon,kirin970";
