@@ -1237,7 +1237,7 @@
 			resets = <&iomcu_rst 0x20 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c1_pmx_func &i2c1_cfg_func>;
-			status = "disabled";
+			status = "ok";
 
 			rt1711@4e {
 				compatible = "richtek,rt1711";
