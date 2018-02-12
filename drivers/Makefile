@@ -177,3 +177,5 @@ obj-$(CONFIG_NVMEM)		+= nvmem/
 obj-$(CONFIG_FPGA)		+= fpga/
 obj-$(CONFIG_TEE)		+= tee/
 obj-$(CONFIG_HISILICON_PLATFORM)+= hisi/
+obj-$(CONFIG_HI_VCODEC_VENC) += vcodec/venc_hivna/
+obj-$(CONFIG_HI_VCODEC_VDEC) += vcodec/vdec_hivna/

@@ -210,4 +210,7 @@ source "drivers/fpga/Kconfig"
 
 source "drivers/tee/Kconfig"
 
+source "drivers/vcodec/venc_hivna/Kconfig"
+
+source "drivers/vcodec/vdec_hivna/Kconfig"
 endmenu
