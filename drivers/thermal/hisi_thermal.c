@@ -46,6 +46,13 @@
 #define HI3660_INT_EN(chan)		(HI3660_OFFSET(chan) + 0x2C)
 #define HI3660_INT_CLR(chan)		(HI3660_OFFSET(chan) + 0x30)
 
+#define KIRIN970_OFFSET(chan)		((chan) * 0x100)
+#define KIRIN970_TEMP(chan)		(KIRIN970_OFFSET(chan) + 0x1C)
+#define KIRIN970_TH(chan)		(KIRIN970_OFFSET(chan) + 0x20)
+#define KIRIN970_LAG(chan)		(KIRIN970_OFFSET(chan) + 0x28)
+#define KIRIN970_INT_CLR(chan)		(KIRIN970_OFFSET(chan) + 0x30)
+#define KIRIN970_INT_EN(chan)		(KIRIN970_OFFSET(chan) + 0x64)
+
 #define HI6220_TEMP_BASE			(-60000)
 #define HI6220_TEMP_RESET			(100000)
 #define HI6220_TEMP_STEP			(785)
@@ -55,8 +62,13 @@
 #define HI3660_TEMP_STEP		(205)
 #define HI3660_TEMP_LAG			(4000)
 
+#define KIRIN970_TEMP_BASE		(-73720)
+#define KIRIN970_TEMP_STEP		(216)
+#define KIRIN970_TEMP_LAG		(4000)
+
 #define HI6220_DEFAULT_SENSOR		2
 #define HI3660_DEFAULT_SENSOR		1
+#define KIRIN970_DEFAULT_SENSOR		1
 
 struct hisi_thermal_sensor {
 	struct thermal_zone_device *tzd;
@@ -121,6 +133,25 @@ static inline int hi3660_thermal_temp_to_step(int temp)
 {
 	return DIV_ROUND_UP(temp - HI3660_TEMP_BASE, HI3660_TEMP_STEP);
 }
+
+/*
+ * for kirin970,
+ *	Step: 198/920 (0.216)
+ *	Temperature base: -73.172°C
+ *
+ * The register is programmed in temperature steps, every step is 216
+ * millidegree and begins at -73 172 m°C
+ */
+static inline int kirin970_thermal_step_to_temp(int step)
+{
+	return KIRIN970_TEMP_BASE + step * KIRIN970_TEMP_STEP;
+}
+
+static inline int kirin970_thermal_temp_to_step(int temp)
+{
+	return DIV_ROUND_UP(temp - KIRIN970_TEMP_BASE, KIRIN970_TEMP_STEP);
+}
+
 
 /*
  * The lag register contains 5 bits encoding the temperature in steps.
@@ -235,6 +266,46 @@ static inline int hi3660_thermal_get_temperature(void __iomem *addr, int id)
 }
 
 /*
+ * [0:6] lag register
+ *
+ * The temperature is coded in steps, cf. KIRIN970_TEMP_STEP.
+ *
+ * Min : 0x00 :  0.0 °C
+ * Max : 0x7F : 27.4 °C
+ *
+ */
+static inline void kirin970_thermal_set_lag(void __iomem *addr,
+					  int id, int value)
+{
+	writel(DIV_ROUND_UP(value, KIRIN970_TEMP_STEP) & 0x7F,
+			addr + KIRIN970_LAG(id));
+}
+
+static inline void kirin970_thermal_alarm_clear(void __iomem *addr,
+					      int id)
+{
+	writel(1, addr + KIRIN970_INT_CLR(id));
+	writel(0, addr + KIRIN970_INT_CLR(id));
+}
+
+static inline void kirin970_thermal_alarm_enable(void __iomem *addr,
+					       int id, int value)
+{
+	writel(!value, addr + KIRIN970_INT_EN(id));
+}
+
+static inline void kirin970_thermal_alarm_set(void __iomem *addr,
+					    int id, int value)
+{
+	writel(value, addr + KIRIN970_TH(id));
+}
+
+static inline int kirin970_thermal_get_temperature(void __iomem *addr, int id)
+{
+	return kirin970_thermal_step_to_temp(readl(addr + KIRIN970_TEMP(id)));
+}
+
+/*
  * Temperature configuration register - Sensor selection
  *
  * Bits [19:12]
@@ -278,6 +349,12 @@ static int hi3660_thermal_irq_handler(struct hisi_thermal_data *data)
 	return 0;
 }
 
+static int kirin970_thermal_irq_handler(struct hisi_thermal_data *data)
+{
+	kirin970_thermal_alarm_clear(data->regs, data->sensor.id);
+	return 0;
+}
+
 static int hi6220_thermal_get_temp(struct hisi_thermal_data *data)
 {
 	return hi6220_thermal_get_temperature(data->regs);
@@ -286,6 +363,11 @@ static int hi6220_thermal_get_temp(struct hisi_thermal_data *data)
 static int hi3660_thermal_get_temp(struct hisi_thermal_data *data)
 {
 	return hi3660_thermal_get_temperature(data->regs, data->sensor.id);
+}
+
+static int kirin970_thermal_get_temp(struct hisi_thermal_data *data)
+{
+	return kirin970_thermal_get_temperature(data->regs, data->sensor.id);
 }
 
 static int hi6220_thermal_disable_sensor(struct hisi_thermal_data *data)
@@ -304,6 +386,13 @@ static int hi3660_thermal_disable_sensor(struct hisi_thermal_data *data)
 {
 	/* disable sensor module */
 	hi3660_thermal_alarm_enable(data->regs, data->sensor.id, 0);
+	return 0;
+}
+
+static int kirin970_thermal_disable_sensor(struct hisi_thermal_data *data)
+{
+	/* disable sensor module */
+	kirin970_thermal_alarm_enable(data->regs, data->sensor.id, 0);
 	return 0;
 }
 
@@ -367,6 +456,28 @@ static int hi3660_thermal_enable_sensor(struct hisi_thermal_data *data)
 	return 0;
 }
 
+static int kirin970_thermal_enable_sensor(struct hisi_thermal_data *data)
+{
+	unsigned int value;
+	struct hisi_thermal_sensor *sensor = &data->sensor;
+
+	/* disable interrupt */
+	kirin970_thermal_alarm_enable(data->regs, sensor->id, 0);
+
+	/* setting lag value between current temp and the threshold */
+	kirin970_thermal_set_lag(data->regs, sensor->id, KIRIN970_TEMP_LAG);
+
+	/* set interrupt threshold */
+	value = kirin970_thermal_temp_to_step(sensor->thres_temp);
+	kirin970_thermal_alarm_set(data->regs, sensor->id, value);
+
+	/* enable interrupt */
+	kirin970_thermal_alarm_clear(data->regs, sensor->id);
+	kirin970_thermal_alarm_enable(data->regs, sensor->id, 1);
+
+	return 0;
+}
+
 static int hi6220_thermal_probe(struct hisi_thermal_data *data)
 {
 	struct platform_device *pdev = data->pdev;
@@ -426,6 +537,33 @@ static int hi3660_thermal_probe(struct hisi_thermal_data *data)
 		return data->irq;
 
 	data->sensor.id = HI3660_DEFAULT_SENSOR;
+
+	return 0;
+}
+
+static int kirin970_thermal_probe(struct hisi_thermal_data *data)
+{
+	struct platform_device *pdev = data->pdev;
+	struct device *dev = &pdev->dev;
+	struct resource *res;
+
+	data->get_temp = kirin970_thermal_get_temp;
+	data->enable_sensor = kirin970_thermal_enable_sensor;
+	data->disable_sensor = kirin970_thermal_disable_sensor;
+	data->irq_handler = kirin970_thermal_irq_handler;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	data->regs = devm_ioremap_resource(dev, res);
+	if (IS_ERR(data->regs)) {
+		dev_err(dev, "failed to get io address\n");
+		return PTR_ERR(data->regs);
+	}
+
+	data->irq = platform_get_irq(pdev, 0);
+	if (data->irq < 0)
+		return data->irq;
+
+	data->sensor.id = KIRIN970_DEFAULT_SENSOR;
 
 	return 0;
 }
@@ -510,6 +648,10 @@ static const struct of_device_id of_hisi_thermal_match[] = {
 	{
 		.compatible = "hisilicon,hi3660-tsensor",
 		.data = hi3660_thermal_probe
+	},
+	{
+		.compatible = "hisilicon,kirin970-tsensor",
+		.data = kirin970_thermal_probe
 	},
 	{ /* end */ }
 };
