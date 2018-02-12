@@ -575,7 +575,6 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		/*
 		thermal-zones {
 
 			cls0: cls0 {
@@ -618,7 +617,7 @@
 				};
 			};
 		};
-		*/
+
 		gpio0: gpio@e8a0b000 {
 			compatible = "arm,pl061", "arm,primecell", "arm,primecell0";
 			reg = <0 0xe8a0b000 0 0x1000>;
