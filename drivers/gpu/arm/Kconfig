@@ -1,1 +1,27 @@
+config MALI_PLATFORM_HIKEY
+        tristate "Hikey Mali configs"
+        default n
+
+config MALI_PLATFORM_HIKEY960
+        tristate "Hikey960 Mali configs"
+        default n
+
+config MALI_PLATFORM_HIKEY970
+        tristate "Hikey970 Mali configs"
+        default n
+
+menu "ARM GPU Configuration"
+
+if MALI_PLATFORM_HIKEY
 source "drivers/gpu/arm/utgard/Kconfig"
+endif
+
+if MALI_PLATFORM_HIKEY960
+source "drivers/gpu/arm/bifrost-hikey960/Kconfig"
+endif
+
+if MALI_PLATFORM_HIKEY970
+source "drivers/gpu/arm/bifrost-hikey970/Kconfig"
+endif
+
+endmenu
