@@ -14,9 +14,9 @@
 #include "kirin970_spmi.dtsi"
 #include "hisi_6421v600_pmic_spmi.dtsi"
 #include "kirin970-gpu.dtsi"
-
 #include "kirin970-ion.dtsi"
 #include "kirin970-coresight.dtsi"
+#include "kirin970-drm.dtsi"
 / {
 	model = "HiKey970";
 	compatible = "Hisilicon,kirin970-hikey970", "Hisilicon,kirin970";
@@ -163,8 +163,6 @@
 		interrupts = <0 290 4>, <0 291 4>, <0 292 4>;
 		clocks = <&media2_crg KIRIN970_CLK_GATE_VDECFREQ>;
 		clock-names = "clk_gate_vdecfreq";
-		/*clocks = <&clk_gate_vdec>;*/
-		/*clock-names = "clk_vdec";*/
 		dec_clk_rate = <450000000>, <300000000>, <185000000>;
 		vdec_fpga = <0x1>;
 		status = "ok";
@@ -180,8 +178,6 @@
 		interrupts = <0 296 4>, <0 297 4>, <0 298 4>;
 		clocks = <&media2_crg KIRIN970_CLK_GATE_VENCFREQ>;
 		clock-names = "clk_gate_vencfreq";
-		/*clocks = <&clk_gate_venc &venc_volt_hold>;*/
-		/*clock-names = "clk_venc", "venc_volt_hold";*/
 		enc_clk_rate = <554000000>, <450000000>, <238000000>;
 		venc_fpga = <0x1>;
 		status = "ok";

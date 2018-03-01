@@ -1342,8 +1342,8 @@
 			resets = <&crg_rst 0x78 27>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c4_pmx_func &i2c4_cfg_func>;
-			status = "disabled";
-			/*
+			status = "ok";
+
 			adv7533: adv7533@39 {
 				status = "ok";
 				compatible = "adi,adv7533";
@@ -1364,7 +1364,6 @@
 					};
 				};
 			};
-			*/
 		};
 
 		hisi_pd: pd_dpm {
@@ -1468,7 +1467,7 @@
 			interrupt-names = "asp_dma_irq";
 			status = "ok";
 		};
-		/*
+
 		sound {
 			compatible = "simple-audio-card";
 			simple-audio-card,name = "hikey-hdmi";
@@ -1485,6 +1484,5 @@
 				sound-dai = <&adv7533>;
 			};
 		};
-		*/
 	};
 };
