@@ -25238,8 +25238,11 @@ static int rtl8168_open(struct net_device *dev)
         if (retval<0)
                 goto err_free_all_allocated_mem;
 
+#if 0 /* Resolve No buff space available */
         if (tp->esd_flag == 0)
                 rtl8168_request_esd_timer(dev);
+#endif
+        tp->esd_flag = 0;
 
         rtl8168_request_link_timer(dev);
 
@@ -26517,8 +26520,9 @@ rtl8168_change_mtu(struct net_device *dev,
         spin_unlock_irqrestore(&tp->lock, flags);
 
         rtl8168_set_speed(dev, tp->autoneg, tp->speed, tp->duplex);
-
+#if 0
         mod_timer(&tp->esd_timer, jiffies + RTL8168_ESD_TIMEOUT);
+#endif
         mod_timer(&tp->link_timer, jiffies + RTL8168_LINK_TIMEOUT);
 out:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
@@ -27873,8 +27877,9 @@ static void rtl8168_down(struct net_device *dev)
 {
         struct rtl8168_private *tp = netdev_priv(dev);
         unsigned long flags;
-
+#if 0
         rtl8168_delete_esd_timer(dev, &tp->esd_timer);
+#endif
 
         rtl8168_delete_link_timer(dev, &tp->link_timer);
 
@@ -28013,8 +28018,9 @@ rtl8168_suspend(struct pci_dev *pdev, pm_message_t state)
                 goto out;
 
         rtl8168_cancel_schedule_work(dev);
-
+#if 0
         rtl8168_delete_esd_timer(dev, &tp->esd_timer);
+#endif
 
         rtl8168_delete_link_timer(dev, &tp->link_timer);
 
@@ -28095,8 +28101,9 @@ rtl8168_resume(struct pci_dev *pdev)
         rtl8168_schedule_work(dev, rtl8168_reset_task);
 
         netif_device_attach(dev);
-
+#if 0
         mod_timer(&tp->esd_timer, jiffies + RTL8168_ESD_TIMEOUT);
+#endif
         mod_timer(&tp->link_timer, jiffies + RTL8168_LINK_TIMEOUT);
 out:
         return 0;
