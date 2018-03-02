@@ -1186,22 +1186,6 @@ static void ion_unmap_dma_buf(struct dma_buf_attachment *attachment,
 	dma_unmap_sg(attachment->dev, table->sgl, table->nents, direction);
 }
 
-void ion_pages_sync_for_device(struct device *dev, struct page *page,
-		size_t size, enum dma_data_direction dir)
-{
-	struct scatterlist sg;
-
-	sg_init_table(&sg, 1);
-	sg_set_page(&sg, page, size, 0);
-	/*
-	 * This is not correct - sg_dma_address needs a dma_addr_t that is valid
-	 * for the targeted device, but this works on the currently targeted
-	 * hardware.
-	 */
-	sg_dma_address(&sg) = page_to_phys(page);
-	dma_sync_sg_for_device(dev, &sg, 1, dir);
-}
-
 struct ion_vma_list {
 	struct list_head list;
 	struct vm_area_struct *vma;
@@ -1488,35 +1472,10 @@ end:
 }
 EXPORT_SYMBOL(ion_import_dma_buf);
 
-static int ion_sync_for_device(struct ion_client *client, int fd)
-{
-	struct dma_buf *dmabuf;
-	struct ion_buffer *buffer;
-
-	dmabuf = dma_buf_get(fd);
-	if (IS_ERR(dmabuf))
-		return PTR_ERR(dmabuf);
-
-	/* if this memory came from ion */
-	if (dmabuf->ops != &dma_buf_ops) {
-		pr_err("%s: can not sync dmabuf from another exporter\n",
-		       __func__);
-		dma_buf_put(dmabuf);
-		return -EINVAL;
-	}
-	buffer = dmabuf->priv;
-
-	dma_sync_sg_for_device(NULL, buffer->sg_table->sgl,
-			       buffer->sg_table->nents, DMA_BIDIRECTIONAL);
-	dma_buf_put(dmabuf);
-	return 0;
-}
-
 /* fix up the cases where the ioctl direction bits are incorrect */
 static unsigned int ion_ioctl_dir(unsigned int cmd)
 {
 	switch (cmd) {
-	case ION_IOC_SYNC:
 	case ION_IOC_FREE:
 	case ION_IOC_CUSTOM:
 		return _IOC_WRITE;
@@ -1640,11 +1599,6 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = PTR_ERR(handle);
 		else
 			data.handle.handle = handle->id;
-		break;
-	}
-	case ION_IOC_SYNC:
-	{
-		ret = ion_sync_for_device(client, data.fd.fd);
 		break;
 	}
 	case ION_IOC_CUSTOM:
