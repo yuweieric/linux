@@ -25,50 +25,31 @@ static int Venc_Enable_Iommu(struct platform_device *pdev)
 {
 	struct iommu_domain *hisi_domain = NULL;
 	struct iommu_domain_data* domain_data = NULL;
-	struct device *dev    = NULL;
 	//uint64_t phy_pgd_base = 0;
-	int ret = HI_FAILURE;
 
 	if ((!pdev ) || (!(&pdev->dev))){
 		HI_ERR_VENC("%s,  invalid Parameters\n", __func__);
 		return HI_FAILURE;
 	}
 
-	dev = &pdev->dev;
-	hisi_domain = iommu_domain_alloc(dev->bus);
+	hisi_domain = hisi_ion_enable_iommu(NULL);
 	if (!hisi_domain) {
-		HI_ERR_VENC("%s, iommu_domain_alloc failed\n", __func__);
+		HI_ERR_VENC("%s, hisi_ion_enable_iommu failed\n", __func__);
 		return HI_FAILURE;
 	}
 
-	ret = iommu_attach_device(hisi_domain, dev);
-	if (ret){
-		HI_ERR_VENC("iommu_attach_device failed\n");
-		goto out_free_domain;
-	}
-    
 	g_hisi_mmu_domain = hisi_domain;
 	domain_data = (struct iommu_domain_data *)(g_hisi_mmu_domain->priv);
 	if (domain_data == NULL){
-		//pCtx->phy_pgd_base = (uint64_t)(domain_data->phy_pgd_base);
-	//}else{
-		goto out_detach_device;
+		return HI_FAILURE;
 	}
 
 	return HI_SUCCESS;
-
-out_detach_device:
-	iommu_detach_device(g_hisi_mmu_domain, dev);
-out_free_domain:
-	iommu_domain_free(hisi_domain);
-	return HI_FAILURE;
 }
 
 static int Venc_Disable_Iommu(struct platform_device *pdev)
 {
 	if( g_hisi_mmu_domain && pdev) {
-		iommu_detach_device(g_hisi_mmu_domain, &pdev->dev);
-		iommu_domain_free(g_hisi_mmu_domain);
 		g_hisi_mmu_domain = NULL;
 		return HI_SUCCESS;
 	}

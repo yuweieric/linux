@@ -50,33 +50,21 @@ static CLK_RATE_E g_ResumeClkType = VDEC_CLK_RATE_LOW;
  ----------------------------------------*/
 static int VDEC_Enable_Iommu(struct device *dev)
 {
-	int ret = HI_FAILURE;    
-	g_VdecSmmuDomain = iommu_domain_alloc(dev->bus);
+	g_VdecSmmuDomain = hisi_ion_enable_iommu(NULL);
 	if (NULL == g_VdecSmmuDomain) {
-        	printk(KERN_ERR "%s iommu_domain_alloc failed!\n", __func__);
-        	return HI_FAILURE;
+		printk(KERN_ERR "%s hisi_ion_enable_iommu failed!\n", __func__);
+		return HI_FAILURE;
 	}
 
-	ret = iommu_attach_device(g_VdecSmmuDomain, dev);
-	if (ret) {
-        	printk(KERN_ERR "iommu_attach_device failed!\n");
-        	goto out_free_domain;
-    	}
-    	return HI_SUCCESS;
-out_free_domain:
-    	iommu_domain_free(g_VdecSmmuDomain);
-    	return HI_FAILURE;  
+	return HI_SUCCESS;
 }
 
 static void VDEC_Disable_Iommu(struct device *dev)
 {
 	g_VdecSmmuDomain = NULL;
-		if( g_VdecSmmuDomain && dev) {
-		iommu_detach_device(g_VdecSmmuDomain, dev);
-		iommu_domain_free(g_VdecSmmuDomain);
+	if(g_VdecSmmuDomain && dev) {
 		g_VdecSmmuDomain = NULL;
 	}
-
 }
 
 static unsigned long long VDEC_GetSmmuBasePhy(struct device *dev)
