@@ -16,6 +16,7 @@
 #include <linux/err.h>
 #include <linux/hisi/hisi_ion.h>
 #include <linux/platform_device.h>
+#include <linux/hisi/hisi-iommu.h>
 #include <linux/slab.h>
 #include <linux/of.h>
 #include <linux/mm.h>
@@ -165,7 +166,6 @@ static long hisi_ion_custom_ioctl(struct ion_client *client,
 	return ret;
 }
 
-extern int hisi_ion_enable_iommu(struct platform_device *pdev);
 
 static int get_type_by_name(const char *name, enum ion_heap_type *type)
 {
@@ -233,7 +233,7 @@ static int hisi_set_platform_data(struct platform_device *pdev)
 			}
 
 			if (!prop->value || !prop->length) {
-				pr_err("%s %s %d, node %s, invalid phandle, value=%p,length=%d\n",
+				pr_err("%s %s %d, node %s, invalid phandle, value=%pK,length=%d\n",
 						__FILE__,__FUNCTION__,__LINE__,
 						np->name, prop->value, prop->length );
 				continue;
@@ -337,7 +337,7 @@ static int hisi_ion_probe(struct platform_device *pdev)
 	}
 
 	/* FIXME will move to iommu driver*/
-	if (hisi_ion_enable_iommu(pdev)) {
+	if (!hisi_ion_enable_iommu(pdev)) {
 		dev_info(&pdev->dev, "enable iommu fail \n");
 		err = -EINVAL;
 		goto err_free_idev;

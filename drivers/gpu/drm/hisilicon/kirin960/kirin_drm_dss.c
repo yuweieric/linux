@@ -678,13 +678,11 @@ static int dss_enable_iommu(struct platform_device *pdev, struct dss_hw_ctx *ctx
 	dev = &pdev->dev;
 
 	/* create iommu domain */
-	ctx->mmu_domain = iommu_domain_alloc(dev->bus);
+	ctx->mmu_domain = hisi_ion_enable_iommu(NULL);
 	if (!ctx->mmu_domain) {
 		pr_err("iommu_domain_alloc failed!\n");
 		return -EINVAL;
 	}
-
-	iommu_attach_device(ctx->mmu_domain, dev);
 
 	return 0;
 }

@@ -1,5 +1,6 @@
 #ifndef HISI_SMMU_H
 #define HISI_SMMU_H
+#include <linux/iommu.h>
 
 /*#define IOMMU_DEBUG*/
 #ifdef IOMMU_DEBUG
@@ -80,15 +81,19 @@ typedef u64 smmu_pgd_t;
 typedef u64 smmu_pmd_t;
 typedef u64 smmu_pte_t;
 
+struct hisi_domain {
+	spinlock_t lock;
+	struct list_head list;
+	smmu_pgd_t *va_pgtable_addr;
+	smmu_pgd_t *va_pgtable_addr_orig;
+	phys_addr_t pa_pgtable_addr;
+	struct iommu_domain domain;
+};
+
 /*smmu device object*/
 struct hisi_smmu_device_lpae {
 	struct device      *dev ;
 	struct list_head   domain_list;
-	unsigned int       ref_count;
-	spinlock_t         lock;
-	unsigned long      va_pgtable_addr;
-	phys_addr_t        smmu_phy_pgtable_addr;
-	smmu_pgd_t         *smmu_pgd;
 };
 
 struct hisi_map_tile_position_lpae {
