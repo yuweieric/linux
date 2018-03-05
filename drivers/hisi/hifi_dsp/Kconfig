@@ -4,5 +4,10 @@ config HIFI_DSP_ONE_TRACK
      bool "hifi low power play device support"
      help
           hifi lpp device provide service for HIFI and AP, in case of HIFI ultra-low power audio play.
+
+config HIKEY970_HIFI
+     bool "special memory mmap for hikey970"
+     help
+          special memory mmap for hikey970.
 endmenu
 

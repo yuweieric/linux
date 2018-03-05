@@ -25,8 +25,11 @@ extern "C" {
 #endif
 
 #include <linux/list.h>
+#ifdef CONFIG_HIKEY970_HIFI
+#include "../ap/platform/kirin970/global_ddr_map.h"
+#else
 #include "../ap/platform/hi3660/global_ddr_map.h"
-
+#endif
 /* mailbox mail_len max */
 #define MAIL_LEN_MAX	(512)
 
@@ -46,7 +49,11 @@ extern "C" {
 #define SIZE_LIMIT_PARAM		(512)
 #endif
 
+#ifdef CONFIG_HIKEY970_HIFI
+#define NVPARAM_COUNT        600         //HIFI NV size is 600
+#else
 #define NVPARAM_COUNT        400	/*HIFI NV size is 400 */
+#endif
 #define NVPARAM_NUMBER       258	/*256+2, nv_data(256) + nv_id(2) */
 #define NVPARAM_START        2	/*head protect_number 0x5a5a5a5a */
 #define NVPARAM_TAIL         2	/*tail protect_number 0x5a5a5a5a */
@@ -77,21 +84,36 @@ extern "C" {
 /* |~~~~~~~6M~~~~~~~|~~~~~~192K~~~~~~|~~~~~208k~~~~~~|~~~~~~3.1M ~~~~~| */
 /* |~~~0x897fffff~~~|~~~0x8982ffff~~~|~~~0x89863fff~~|~~~0x89B80000~~~| */
 
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_UNSEC_REGION_SIZE              (0x500000)
+#define HIFI_MUSIC_DATA_SIZE                (0x132000 + 0x32000)
+#define PCM_PLAY_BUFF_SIZE                  (0x200000 - 0x32000)
+#else
 #define HIFI_UNSEC_REGION_SIZE              (0x380000)
 #define HIFI_MUSIC_DATA_SIZE                (0x132000)
 #define PCM_PLAY_BUFF_SIZE                  (0x100000)
+#endif
 #define DRV_DSP_UART_TO_MEM_SIZE            (0x7f000)
 #define DRV_DSP_UART_TO_MEM_RESERVE_SIZE    (0x100)
 #define DRV_DSP_STACK_TO_MEM_SIZE           (0x1000)
 #define HIFI_ICC_DEBUG_SIZE                 (0x13000)
 #define HIFI_FLAG_DATA_SIZE                 (0x1000)
 #define HIFI_SEC_HEAD_SIZE                  (0x1000)
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_AP_NV_DATA_SIZE                (0x4BC00)
+#else
 #define HIFI_AP_NV_DATA_SIZE                (0x32800)
+#endif
 #define HIFI_AP_MAILBOX_TOTAL_SIZE          (0x10000)
 #define CODEC_DSP_OM_DMA_BUFFER_SIZE        (0xF000)
 #define CODEC_DSP_OM_DMA_CONFIG_SIZE        (0x80)
 #define CODEC_DSP_SOUNDTRIGGER_TOTAL_SIZE   (0xF000)
 #define HIFI_PCM_UPLOAD_BUFFER_SIZE         (0x2000)
+
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_PCM_UPLOAD_BUFFER_2_SHARE_MEM_OFFSET         (0x4d800)
+#endif
+
 #define HIFI_HIKEY_SHARE_SIZE               (0x1800 * 2)
 #define HIFI_UNSEC_RESERVE_SIZE             (0x53780)
 
@@ -108,7 +130,13 @@ extern "C" {
 #define CODEC_DSP_OM_DMA_CONFIG_ADDR    (CODEC_DSP_OM_DMA_BUFFER_ADDR + CODEC_DSP_OM_DMA_BUFFER_SIZE)
 #define CODEC_DSP_SOUNDTRIGGER_BASE_ADDR (CODEC_DSP_OM_DMA_CONFIG_ADDR + CODEC_DSP_OM_DMA_CONFIG_SIZE)
 #define HIFI_PCM_UPLOAD_BUFFER_ADDR     (CODEC_DSP_SOUNDTRIGGER_BASE_ADDR + CODEC_DSP_SOUNDTRIGGER_TOTAL_SIZE)
+
+
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_HIKEY_SHARE_MEM_ADDR       (HIFI_PCM_UPLOAD_BUFFER_ADDR + HIFI_PCM_UPLOAD_BUFFER_SIZE + HIFI_PCM_UPLOAD_BUFFER_2_SHARE_MEM_OFFSET)
+#else
 #define HIFI_HIKEY_SHARE_MEM_ADDR       (HIFI_PCM_UPLOAD_BUFFER_ADDR + HIFI_AP_MAILBOX_TOTAL_SIZE)
+#endif
 #define HIFI_UNSEC_RESERVE_ADDR         (HIFI_HIKEY_SHARE_MEM_ADDR + HIFI_HIKEY_SHARE_SIZE)
 #if 0
 #define HIFI_OM_LOG_SIZE                (0xA000)
@@ -143,10 +171,20 @@ extern "C" {
 #define DRV_DSP_FAMA_ON			(0x1)
 #define DRV_DSP_FAMA_OFF		(0x0)
 
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_SEC_REGION_SIZE            (0xC00000)
+#else
 #define HIFI_SEC_REGION_SIZE            (0x980000)
+#endif
 #define HIFI_IMAGE_OCRAMBAK_SIZE        (0x30000)
 #ifdef HIFI_TCM_208K
+
+#ifdef CONFIG_HIKEY970_HIFI
+#define HIFI_RUN_SIZE                   (0xB00000)
+#else
 #define HIFI_RUN_SIZE                   (0x600000)
+#endif
+
 #define HIFI_IMAGE_TCMBAK_SIZE          (0x34000)
 #define HIFI_IMAGE_SIZE                 (0x31C000)
 #define HIFI_RUN_ITCM_BASE              (0xe8080000)

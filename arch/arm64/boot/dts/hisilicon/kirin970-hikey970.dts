@@ -15,6 +15,7 @@
 #include "hisi_6421v600_pmic_spmi.dtsi"
 #include "kirin970-gpu.dtsi"
 #include "kirin970-ion.dtsi"
+#include "kirin970_ipc.dtsi"
 #include "kirin970-coresight.dtsi"
 #include "kirin970-drm.dtsi"
 / {
