@@ -790,10 +790,10 @@ int hikey_ap_mailbox_read(struct hikey_msg_with_content *hikey_msg)
 					hikey_msg->msg_info.msg_len);
 		return -1;
 	}
-
-	hikey_ap_mailbox_read_queue(hikey_msg_head, hikey_msg->msg_info.msg_content,
-			hikey_msg->msg_info.msg_len - offsetof(struct hikey_ap2dsp_msg_body, msg_content));
-
+	if(hikey_msg->msg_info.msg_len > offsetof(struct hikey_ap2dsp_msg_body, msg_content)){
+			hikey_ap_mailbox_read_queue(hikey_msg_head, hikey_msg->msg_info.msg_content,
+				hikey_msg->msg_info.msg_len - offsetof(struct hikey_ap2dsp_msg_body, msg_content));
+	}
 	return 0;
 }
 
