@@ -190,6 +190,7 @@
 				compatible = "hisilicon-hisi-ldo";
 				reg = <6 0>;
 				regulator-name = "ldo34";
+				regulator-always-on;
 				regulator-min-microvolt = <2600000>;
 				regulator-max-microvolt = <3300000>;
 				hisilicon,hisi-ctrl = <0x33 0x01 0x00>;

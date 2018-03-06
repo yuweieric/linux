@@ -118,17 +118,6 @@
 		};
 	};
 
-	leds {
-		compatible = "gpio-leds";
-		can_active_led {
-			label = "can_active";
-			/* GPIO_012_USER_LED5*/
-			gpios = <&gpio1 4 0>;
-			linux,default-trigger = "can0-rxtx";
-			default-state = "off";
-		};
-	};
-
 	soc {
 		uart6: serial@fff32000 {
 			status = "okay";
@@ -149,11 +138,34 @@
 			linux,default-trigger = "mmc0";
 		};
 
+		gps_active_led {
+			label = "gps_active";
+			/* gpio_049_user_led6 */
+			gpios = <&gpio6 1 0>;
+			default-state = "off";
+		};
+
+		bt_active_led {
+			label = "bt_active";
+			/* gpio_019_bt_active */
+			gpios = <&gpio2 3 0>;
+			linux,default-trigger = "hci0rx";
+			default-state = "off";
+		};
+
 		wlan_active_led {
 			label = "wifi_active";
 			/* gpio_024_wifi_active */
 			gpios = <&gpio3 0 0>;
 			linux,default-trigger = "phy0tx";
+			default-state = "off";
+		};
+
+		can_active_led {
+			label = "can_active";
+			/* GPIO_012_USER_LED5*/
+			gpios = <&gpio1 4 0>;
+			linux,default-trigger = "can0-rxtx";
 			default-state = "off";
 		};
 	};
@@ -193,6 +205,21 @@
 		status = "ok";
 	};
 
+	gps_en: gps-en-1-8v {
+		compatible = "regulator-fixed";
+		regulator-name = "gps-en-regulator";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+
+		/* GPIO_168_GPS_EN */
+		gpio = <&gpio21 0 0>;
+		regulator-always-on;
+
+		/* T-active: 15ms, NSTANDBY negated to device active */
+		startup-delay-us = <15000>;
+		enable-active-high;
+	};
+
 	wlan_en: wlan-en-1-8v {
 		compatible = "regulator-fixed";
 		regulator-name = "wlan-en-regulator";
@@ -201,11 +228,35 @@
 
 		/* GPIO_051_WIFI_EN */
 		gpio = <&gpio6 3 0>;
-		regulator-always-on;
+		/* regulator-always-on; */
 
 		/* WLAN card specific delay */
 		startup-delay-us = <70000>;
 		enable-active-high;
+	};
+
+	/* bluetooth - TI WL1837 */
+	kim {
+		compatible = "kim";
+		/*
+		 * FIXME: The following is complete CRAP since
+		 * the vendor driver doesn't follow the gpio
+		 * binding. Passing in a magic Linux gpio number
+		 * here until we fix the vendor driver.
+		 */
+		/* BT_EN: GPIO_054_BT_EN */
+		nshutdown_gpio = <462>;
+		dev_name = "/dev/ttyAMA4";
+		flow_cntrl = <1>;
+		baud_rate = <115200>;
+		/* baud_rate = <3000000>; */
+		/* baud_rate = <230400>; ok */
+		/* baud_rate = <921600>; ok */
+		/* baud_rate = <1500000>; nok */
+	};
+
+	btwilink {
+		compatible = "btwilink";
 	};
 };
 
@@ -231,5 +282,20 @@
 		/* WL_IRQ, GPIO_177_WL_WAKEUP_AP */
 		interrupt-parent = <&gpio22>;
 		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
+	};
+};
+
+&uart3 {
+	/* GPS BCM47531 */
+	status = "okay";
+};
+
+&uart4 {
+	status = "okay";
+
+	bluetooth {
+		compatible = "ti,wl1837-st";
+		enable-gpios = <&gpio6 6 GPIO_ACTIVE_HIGH>; /* gpio_054 */
+		max-speed = <921600>;
 	};
 };
