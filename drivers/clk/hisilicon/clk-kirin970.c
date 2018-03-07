@@ -561,6 +561,7 @@ static const struct hisi_divider_clock kirin970_media1_divider_clks[] = {
 static const struct hisi_gate_clock kirin970_media2_gate_sep_clks[] = {
 	{ KIRIN970_CLK_GATE_VDECFREQ, "clk_gate_vdecfreq", "clk_div_vdec", CLK_SET_RATE_PARENT, 0x00, 8, 0, },
 	{ KIRIN970_CLK_GATE_VENCFREQ, "clk_gate_vencfreq", "clk_div_venc", CLK_SET_RATE_PARENT, 0x00, 5, 0, },
+	{ KIRIN970_CLK_GATE_ICSFREQ, "clk_gate_icsfreq", "clk_div_ics", CLK_SET_RATE_PARENT, 0x00, 2, 0,  },
 };
 
 static void kirin970_clk_crgctrl_init(struct device_node *np)

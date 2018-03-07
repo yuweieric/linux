@@ -18,6 +18,8 @@
 #include "kirin970_ipc.dtsi"
 #include "kirin970-coresight.dtsi"
 #include "kirin970-drm.dtsi"
+#include "kirin970_ics_cs.dtsi"
+
 / {
 	model = "HiKey970";
 	compatible = "Hisilicon,kirin970-hikey970", "Hisilicon,kirin970";

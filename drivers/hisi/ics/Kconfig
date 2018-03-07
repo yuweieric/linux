@@ -1,0 +1,40 @@
+#
+# Cambricon IPU Platform Specific Drivers
+#
+
+menuconfig HISI_ICS_IPU_PLATFORM
+	bool "Platform supoort for Cambricon IPU Device"
+	default y
+	help
+	  Say Y here to get to see options for device drivers of various
+	  Cambricon IPU platforms. This option itself does not add any kernel code.
+
+	  If you say N, all options in this submenu will be skipped and disabled.
+
+if HISI_ICS_IPU_PLATFORM
+
+config HISI_ICS_IPU
+	tristate "Cambricon IPU Driver"
+	default y
+	help
+	  Cambricon IPU Platform driver.
+
+config HISI_IPU_SET_VCODECBUS
+	tristate "Allow IPU Driver to set VCODEC bus clock rate"
+	default n
+	help
+	  Allow IPU Driver to set VCODEC bus clock rate.
+
+config HISI_IPU_MNTN
+	tristate "Enable IPU Driver maintain function"
+	default n
+	help
+	  Enable IPU Driver maintain function.
+
+config HISI_IPU_REGULATOR
+	tristate "Enable IPU Driver regulator control"
+	default n
+	help
+	  Enable IPU Driver regulator control.
+
+endif # HISI_ICS_IPU_PLATFORM
