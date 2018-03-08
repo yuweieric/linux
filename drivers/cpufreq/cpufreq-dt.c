@@ -27,6 +27,8 @@
 
 #include "cpufreq-dt.h"
 
+extern bool cpufreq_suspended;
+
 struct private_data {
 	struct opp_table *opp_table;
 	struct device *cpu_dev;
@@ -307,7 +309,9 @@ static int cpufreq_exit(struct cpufreq_policy *policy)
 {
 	struct private_data *priv = policy->driver_data;
 
-	cpufreq_cooling_unregister(priv->cdev);
+	if (!cpufreq_suspended)
+		cpufreq_cooling_unregister(priv->cdev);
+
 	dev_pm_opp_free_cpufreq_table(priv->cpu_dev, &policy->freq_table);
 	dev_pm_opp_of_cpumask_remove_table(policy->related_cpus);
 	if (priv->reg_name)
@@ -327,6 +331,8 @@ static void cpufreq_ready(struct cpufreq_policy *policy)
 	if (WARN_ON(!np))
 		return;
 
+	if (cpufreq_suspended)
+		goto put;
 	/*
 	 * For now, just loading the cooling device;
 	 * thermal DT code takes care of matching them.
@@ -348,6 +354,7 @@ static void cpufreq_ready(struct cpufreq_policy *policy)
 		}
 	}
 
+put:
 	of_node_put(np);
 }
 
