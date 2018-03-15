@@ -1,7 +1,6 @@
 #include <linux/errno.h>
 #include <linux/clk-provider.h>
 #include "ipu_clock.h"
-// #include "ipu_mntn.h"
 #include "cambricon_ipu.h"
 
 // #define CONFIG_IPU_CLOCK_CONTROL
@@ -96,7 +95,6 @@ static int ipu_clock_set(struct ics_clock *clk, unsigned int new_rate)
 			ret = clk_set_rate(clk->ipu_clk_ptr, (unsigned long)target_rate);
 			if (ret) {
 				printk(KERN_ERR"[%s]: IPU_ERROR:set ipu rate %d fail, ret:%d\n", __func__, target_rate, ret);
-				rdr_system_error((unsigned int)MODID_NPU_EXC_SET_BACK_CLOCK_FAIL, 0, 0);
 				return ret;
 			}
 		} else {
@@ -131,7 +129,6 @@ static int ipu_clock_set(struct ics_clock *clk, unsigned int new_rate)
 		if (ret) {
 			/* in low temperature, clk set rate to HIGH will fail, in this case try to set rate to MIDDLE */
 			printk(KERN_ERR"[%s]: IPU_ERROR:set ipu rate %d fail, ret:%d\n", __func__, target_rate, ret);
-			rdr_system_error((unsigned int)MODID_NPU_EXC_SET_CLOCK_FAIL, 0, 0);
 			return ret;
 		}
 	}

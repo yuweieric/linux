@@ -5,7 +5,6 @@
 #include <linux/list.h>
 #include <linux/dma-buf.h>
 #include "ipu_smmu_drv.h"
-// #include "ipu_mntn.h"
 
 #define SMMU_MSTR_DEBUG_CONFIG_WR (16)
 #define SMMU_MSTR_DEBUG_CONFIG_CS (17)
@@ -988,6 +987,7 @@ void ipu_smmu_dump_strm(void)
 	unsigned int port_in[IPU_SMMU_MSTR_DEBUG_BASE_NUM] = {
 		IPU_SMMU_MSTR_DEBUG_AXI_RD_CMD_ADDR, IPU_SMMU_MSTR_DEBUG_AXI_RD_CMD_INFO,
 		IPU_SMMU_MSTR_DEBUG_AXI_WR_CMD_ADDR, IPU_SMMU_MSTR_DEBUG_AXI_WR_CMD_INFO};
+	unsigned int rd_bitmap, wr_bitmap, rd_cmd_total_cnt0, rd_cmd_total_cnt1, rd_cmd_total_cnt2, wr_cmd_total_cnt;
 
 	#ifdef CONFIG_HUAWEI_DSM
 	int sz = REGISTER_INFO_MAX_LEN;
@@ -1033,20 +1033,13 @@ void ipu_smmu_dump_strm(void)
 
 	iowrite32(IPU_SMMU_RD_CMD_BUF_BITMAP, (void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_in_0));
 	iowrite32(IPU_SMMU_WR_CMD_BUF_BITMAP, (void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_in_0));
-#ifdef CONFIG_HISI_IPU_MNTN
-	ipu_reg_info.mstr_reg.rd_bitmap = ioread32((void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_out));
-	ipu_reg_info.mstr_reg.wr_bitmap = ioread32((void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_out));
-	ipu_reg_info.mstr_reg.rd_cmd_total_cnt0 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[0]));
-	ipu_reg_info.mstr_reg.rd_cmd_total_cnt1 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[1]));
-	ipu_reg_info.mstr_reg.rd_cmd_total_cnt2 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[2]));
-	ipu_reg_info.mstr_reg.wr_cmd_total_cnt	= ioread32((void *)(mstr_io_addr + (unsigned long)offset->write_cmd_total_cnt));
+	rd_bitmap = ioread32((void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_out));
+	wr_bitmap = ioread32((void *)(mstr_io_addr + (unsigned long)offset->smmu_mstr_dbg_port_out));
+	rd_cmd_total_cnt0 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[0]));
+	rd_cmd_total_cnt1 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[1]));
+	rd_cmd_total_cnt2 = ioread32((void *)(mstr_io_addr + (unsigned long)offset->read_cmd_total_cnt[2]));
+	wr_cmd_total_cnt = ioread32((void *)(mstr_io_addr + (unsigned long)offset->write_cmd_total_cnt));
 	printk(KERN_ERR"RD_BITMAP=%x, WR_BITMAP=%x, rd_cmd_total_cnt[0-3]={%x, %x, %x}, wr_cmd_total_cnt=%x\n",
-		ipu_reg_info.mstr_reg.rd_bitmap,
-		ipu_reg_info.mstr_reg.wr_bitmap,
-		ipu_reg_info.mstr_reg.rd_cmd_total_cnt0,
-		ipu_reg_info.mstr_reg.rd_cmd_total_cnt1,
-		ipu_reg_info.mstr_reg.rd_cmd_total_cnt2,
-		ipu_reg_info.mstr_reg.wr_cmd_total_cnt);
-#endif
+		rd_bitmap, wr_bitmap, rd_cmd_total_cnt0, rd_cmd_total_cnt1, rd_cmd_total_cnt2, wr_cmd_total_cnt);
 }
 

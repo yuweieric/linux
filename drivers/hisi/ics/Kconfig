@@ -25,12 +25,6 @@ config HISI_IPU_SET_VCODECBUS
 	help
 	  Allow IPU Driver to set VCODEC bus clock rate.
 
-config HISI_IPU_MNTN
-	tristate "Enable IPU Driver maintain function"
-	default n
-	help
-	  Enable IPU Driver maintain function.
-
 config HISI_IPU_REGULATOR
 	tristate "Enable IPU Driver regulator control"
 	default n

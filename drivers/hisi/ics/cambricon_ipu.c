@@ -56,7 +56,6 @@
 #include "ipu_smmu_drv.h"
 #include "ipu_clock.h"
 #include "cambricon_ipu.h"
-// #include "ipu_mntn.h"
 
 #define COMP_CAMBRICON_IPU_DRV_NAME "hisilicon,cambricon-ipu"
 
@@ -699,20 +698,7 @@ bool ipu_get_feature_tree (struct device *dev)
 	}
 
 	memset(&adapter->feature_tree, 0, sizeof(adapter->feature_tree));// coverity[secure_coding]
-	if (strncmp(str, "kirin970_es", sizeof("kirin970_es")) == 0) {
-		adapter->feature_tree.finish_irq_expand_ns = false;
-		adapter->feature_tree.finish_irq_expand_p = false;
-		adapter->feature_tree.finish_irq_expand_s = false;
-		adapter->feature_tree.finish_irq_to_hifi = false;
-		adapter->feature_tree.finish_irq_to_ivp = false;
-		adapter->feature_tree.finish_irq_to_isp = false;
-		adapter->feature_tree.finish_irq_to_lpm3 = false;
-		adapter->feature_tree.finish_irq_to_iocmu = false;
-		adapter->feature_tree.smmu_port_select = false;
-		adapter->feature_tree.soft_watchdog_enable = false;
-		adapter->feature_tree.ipu_reset_when_in_error = IPU_RESET_UNSUPPORT;
-		adapter->feature_tree.ipu_bandwidth_lmt = IPU_BANDWIDTH_LMT_UNSUPPORT;
-	} else if (strncmp(str, "kirin970_cs", sizeof("kirin970_cs")) == 0) {
+	if (strncmp(str, "kirin970_cs", sizeof("kirin970_cs")) == 0) {
 		adapter->feature_tree.finish_irq_expand_ns = true;
 		adapter->feature_tree.finish_irq_expand_p = true;
 		adapter->feature_tree.finish_irq_expand_s = true;
@@ -744,14 +730,12 @@ int regulator_ip_vipu_enable(void)
 	ret = regulator_is_enabled(adapter->vipu_ip);
 	if (ret) {
 		printk(KERN_ERR"[%s]:IPU_ERROR:regulator_is_enabled: %d\n", __func__, ret);
-		// rdr_system_error((unsigned int)MODID_NPU_EXC_SET_POWER_UP_STATUS_FAULT, 0, 0);
 		return -EBUSY;
 	}
 
 	ret = regulator_enable(adapter->vipu_ip);
 	if (0 != ret) {
 		printk(KERN_ERR"[%s]:IPU_ERROR:Failed to enable: %d\n", __func__, ret);
-		// rdr_system_error((unsigned int)MODID_NPU_EXC_SET_POWER_UP_FAIL, 0, 0);
 		return ret;
 	}
 #endif
@@ -766,7 +750,6 @@ int regulator_ip_vipu_disable(void)
 	ret = regulator_disable(adapter->vipu_ip);
 	if (ret != 0) {
 		printk(KERN_ERR"[%s]:IPU_ERROR:Failed to disable: %d\n", __func__, ret);
-		// rdr_system_error((unsigned int)MODID_NPU_EXC_SET_POWER_DOWN_FAIL, 0, 0);
 		return ret;
 	}
 #endif
@@ -1379,7 +1362,6 @@ static irqreturn_t ipu_interrupt_handler(int irq, void *dev)
 
 	if (ipu_smmu_err_isr) {
 		if (adapter->feature_tree.ipu_reset_when_in_error && adapter->reset_va) {
-			// rdr_system_error((unsigned int)MODID_NPU_EXC_INTERRUPT_ABNORMAL, 0, 0);
 			ipu_reset_proc((unsigned int)adapter->reset_va); //lint !e570
 		}
 	} else {
@@ -1414,6 +1396,7 @@ static irqreturn_t ipu_interrupt_handler(int irq, void *dev)
 static int ipu_reset(void *arg)
 {
 	static unsigned long last_computed_task = 0;
+	unsigned int peri_stat, ppll_select, power_stat, power_ack, reset_stat, perclken0, perstat0;
 
 	#ifdef CONFIG_HUAWEI_DSM
 	char register_info_flag[] = "NULL";
@@ -1429,18 +1412,6 @@ static int ipu_reset(void *arg)
 
 		mutex_lock(&adapter->power_mutex);
 
-		/* WTD time out, report to DSM */
-		#ifdef CONFIG_HUAWEI_DSM
-		if (last_computed_task != adapter->computed_task_cnt){
-			ipu_smmu_dump_strm();
-			perr = register_info;
-		}
-		#endif /* CONFIG_HUAWEI_DSM */
-
-		DSM_AI_KERN_ERROR_REPORT(DSM_AI_KERN_WTD_TIMEOUT_ERR_NO,
-			"IPU soft watchdog timeout, ipu_status=%d, ttbr0=%x, inst_set=%d, offchip{set=%x, base=%x}, last_computed_task=%d, register_info=%s.\n",
-			adapter->ipu_power_up, adapter->smmu_ttbr0, adapter->boot_inst_set.boot_inst_recorded_is_config, adapter->boot_inst_set.access_ddr_addr_is_config,
-			adapter->boot_inst_set.ipu_access_ddr_addr, adapter->computed_task_cnt, perr);
 		if (false == adapter->ipu_power_up) {
 			printk(KERN_ERR"[%s]: IPU_ERROR: ipu is power off, can not resume\n", __func__);
 			mutex_unlock(&adapter->power_mutex);
@@ -1453,31 +1424,30 @@ static int ipu_reset(void *arg)
 				__func__, adapter->ipu_power_up, adapter->smmu_ttbr0, adapter->boot_inst_set.boot_inst_recorded_is_config,
 				adapter->boot_inst_set.access_ddr_addr_is_config, adapter->boot_inst_set.ipu_access_ddr_addr, adapter->computed_task_cnt);
 
-#ifdef CONFIG_HISI_IPU_MNTN
 		/* get clock and power status in register */
-		ipu_reg_info.peri_reg.peri_stat   = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.peristat7);
-		ipu_reg_info.peri_reg.ppll_select = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.clkdiv8);
-		ipu_reg_info.peri_reg.power_stat  = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.perpwrstat);
-		ipu_reg_info.peri_reg.power_ack   = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.perpwrack);
-		ipu_reg_info.peri_reg.reset_stat  = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perrststat0);
-		ipu_reg_info.peri_reg.perclken0   = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perclken0);
-		ipu_reg_info.peri_reg.perstat0    = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perstat0);
+		peri_stat   = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.peristat7);
+		ppll_select = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.clkdiv8);
+		power_stat  = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.perpwrstat);
+		power_ack   = ioread32((void *)adapter->peri_io_addr + adapter->peri_reg_offset.perpwrack);
+		reset_stat  = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perrststat0);
+		perclken0   = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perclken0);
+		perstat0    = ioread32((void *)adapter->media2_io_addr + adapter->media2_reg_offset.perstat0);
 
 		printk(KERN_ERR"[%s]: peri_stat=%x, ppll_select=%x, power_stat=%x, power_ack=%x, reset_stat=%x, perclken=%x, perstat=%x\n",
-			__func__,
-			ipu_reg_info.peri_reg.peri_stat,
-			ipu_reg_info.peri_reg.ppll_select,
-			ipu_reg_info.peri_reg.power_stat,
-			ipu_reg_info.peri_reg.power_ack,
-			ipu_reg_info.peri_reg.reset_stat,
-			ipu_reg_info.peri_reg.perclken0,
-			ipu_reg_info.peri_reg.perstat0);
-#endif
+			__func__, peri_stat, ppll_select, power_stat, power_ack, reset_stat, perclken0, perstat0);
 
 		/* get memory info in register */
 		ipu_smmu_dump_strm();
-		// rdr_system_error((unsigned int)MODID_NPU_EXC_DEAD, 0, 0);
-	}
+		/* WTD time out, report to DSM */
+#ifdef CONFIG_HUAWEI_DSM
+		perr = register_info;
+		DSM_AI_KERN_ERROR_REPORT(DSM_AI_KERN_WTD_TIMEOUT_ERR_NO,
+			"IPU soft watchdog timeout, ipu_status=%d, ttbr0=%x, inst_set=%d, offchip{set=%x, base=%x}, last_computed_task=%d, register_info=%s.\n",
+			adapter->ipu_power_up, adapter->smmu_ttbr0, adapter->boot_inst_set.boot_inst_recorded_is_config, adapter->boot_inst_set.access_ddr_addr_is_config,
+			adapter->boot_inst_set.ipu_access_ddr_addr, adapter->computed_task_cnt, perr);
+#endif /* CONFIG_HUAWEI_DSM */
+
+	    }
 
 		/* reset ipu */
 		ipu_reset_proc((unsigned int)adapter->reset_va);
@@ -2648,14 +2618,6 @@ static int cambricon_ipu_probe(struct platform_device *pdev)
 
 #endif
 
-#ifdef CONFIG_HISI_IPU_MNTN
-	err = ipu_mntn_rdr_init();
-	if (err) {
-		printk(KERN_ERR"[%s]: Call ipu_mntn_rdr_init is failed!ret=%d\n", __func__, err);
-		goto exit_error;
-	}
-#endif
-
 	ipu_watchdog_init(&adapter->reset_wtd, adapter->feature_tree.soft_watchdog_enable, ipu_reset_irq);
 
 	sema_init(&(adapter->reset_wtd.sem), 0);
@@ -2828,9 +2790,6 @@ static void __exit cambricon_ipu_exit(void)
 {
 	platform_device_unregister(&cambricon_ipu_device);
 	platform_driver_unregister(&cambricon_ipu_driver);
-#ifdef CONFIG_HISI_IPU_MNTN
-	destroy_workqueue(ipu_mntn_rdr_wq);
-#endif
 }
 
 /*lint -e753 -e528*/

@@ -5,10 +5,5 @@ endif
 obj-$(CONFIG_HISI_ICS_IPU) += cambricon_ipu.o
 obj-$(CONFIG_HISI_ICS_IPU) += ipu_smmu_drv.o
 obj-$(CONFIG_HISI_ICS_IPU) += ipu_clock.o
-obj-$(CONFIG_HISI_IPU_MNTN) += ipu_mntn.o
-ifneq ($(TARGET_BUILD_VARIANT),user)
-obj-$(CONFIG_HISI_ICS_IPU) += ics_debug_proxy.o
-obj-y += ics_debug.o
-endif
 
 EXTRA_CFLAGS += -I$(srctree)/drivers/hisi/ap/platform/kirin970
