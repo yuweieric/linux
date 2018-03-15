@@ -13,6 +13,8 @@
 #include <dt-bindings/input/input.h>
 #include "kirin970_spmi.dtsi"
 #include "hisi_6421v600_pmic_spmi.dtsi"
+#include "kirin970_powerip.dtsi"
+#include "hisi_power_ip_test.dtsi"
 #include "kirin970-gpu.dtsi"
 #include "kirin970-ion.dtsi"
 #include "kirin970_ipc.dtsi"

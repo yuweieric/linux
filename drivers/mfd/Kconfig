@@ -367,6 +367,12 @@ config HISI_PMIC_PMU_SPMI
 	  mapped I/O ports are the way of communication with it. and use spmi
 	  passageway read pmu address.
 
+config MFD_HISI_IP_CORE
+	tristate "Control HiSilicon system interior area Bus on and off"
+	depends on OF
+	help
+	  This driver control HiSilicon system interior area power management from atf.
+
 config HTC_PASIC3
 	tristate "HTC PASIC3 LED/DS1WM chip support"
 	select MFD_CORE
