@@ -4,4 +4,4 @@
 
 source "drivers/gpu/drm/hisilicon/kirin/Kconfig"
 
-source "drivers/gpu/drm/hisilicon/kirin960/Kconfig"
+source "drivers/gpu/drm/hisilicon/kirin9xx/Kconfig"

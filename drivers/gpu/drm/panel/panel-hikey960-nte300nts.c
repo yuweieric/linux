@@ -29,7 +29,7 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
 
-#include "../hisilicon/kirin960/kirin_fb_panel.h"
+#include "../hisilicon/kirin9xx/kirin_fb_panel.h"
 
 #define REGFLAG_DELAY	0XFFE
 
