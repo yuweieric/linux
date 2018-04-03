@@ -593,12 +593,23 @@ static int kirin970_pcie_clkreq_cfg(struct kirin_pcie *pcie, int pull_up)
 
 int kirin970_pcie_turn_on(struct kirin_pcie *pcie)
 {
-	int ret;
+	int ret = 0;
 	u32 val;
+
+	mutex_lock(&pcie->power_lock);
+
+	if (atomic_read(&(pcie->is_power_on)))
+		goto MUTEX_UNLOCK;
+
+	ret = regulator_enable(pcie->ldo33);
+	if (ret) {
+		dev_err(pcie->pp.dev, "Failed to enable ldo33\n");
+		goto MUTEX_UNLOCK;
+	}
 
 	ret = kirin970_pcie_clkreq_cfg(pcie, false);
 	if (ret)
-		return ret;
+		goto DISABLE_LDO;
 
 	/* pull downphy ISO */
 	regmap_write(pcie->sysctrl, 0x44, 0x20);
@@ -606,7 +617,7 @@ int kirin970_pcie_turn_on(struct kirin_pcie *pcie)
 	/* enable PCIe sys&phy pclk */
 	ret = kirin970_pcie_pclk_ctrl(pcie, true);
 	if (ret)
-		return ret;
+		goto DISABLE_LDO;
 
 	/* deasset PCIeCtrl&PCIePHY */
 	regmap_write(pcie->crgctrl, 0x88, 0x8c000000);
@@ -637,23 +648,35 @@ int kirin970_pcie_turn_on(struct kirin_pcie *pcie)
 	if (kirin970_pcie_noc_power(pcie, false))
 		goto ALLCLK_CLOSE;
 
-	return 0;
+	atomic_set(&(pcie->is_power_on), 1);
+	ret = 0;
+	goto MUTEX_UNLOCK;
 
 ALLCLK_CLOSE:
 	kirin970_pcie_allclk_ctrl(pcie, false);
 PCLK_CLOSE:
 	kirin970_pcie_pclk_ctrl(pcie, false);
-	return -1;
+DISABLE_LDO:
+	regulator_disable(pcie->ldo33);
+	ret = -1;
+MUTEX_UNLOCK:
+	mutex_unlock(&pcie->power_lock);
+	return ret;
 }
 
 int kirin970_pcie_turn_off(struct kirin_pcie *pcie)
 {
 	u32 val;
-	int ret;
+	int ret = 0;
+
+	mutex_lock(&pcie->power_lock);
+
+	if (!atomic_read(&(pcie->is_power_on)))
+		goto MUTEX_UNLOCK;
 
 	ret = kirin970_pcie_noc_power(pcie, true);
 	if (ret)
-		return ret;
+		goto MUTEX_UNLOCK;
 
 	kirin970_pcie_perst_cfg(pcie, false);
 
@@ -671,9 +694,19 @@ int kirin970_pcie_turn_off(struct kirin_pcie *pcie)
 
 	ret = kirin970_pcie_clkreq_cfg(pcie, true);
 	if (ret)
-		return ret;
+		goto MUTEX_UNLOCK;
 
-	return 0;
+	atomic_set(&(pcie->is_power_on), 0);
+
+	ret = regulator_disable(pcie->ldo33);
+	if (ret) {
+		dev_err(pcie->pp.dev, "Failed to disable ldo33\n");
+		goto MUTEX_UNLOCK;
+	}
+
+MUTEX_UNLOCK:
+	mutex_unlock(&pcie->power_lock);
+	return ret;
 }
 
 int kirin970_pcie_power_on(struct kirin_pcie *pcie, bool on)
@@ -692,17 +725,17 @@ static int kirin970_pcie_probe(struct kirin_pcie *pcie)
 
 	pp = &pcie->pp;
 	pdev = to_platform_device(pp->dev);
-	
+
 	ret = kirin970_pcie_get_clk(pcie, pdev);
 	if (ret != 0)
-		return -ENODEV;	
+		return -ENODEV;
 
 	ret = kirin970_pcie_get_resource(pp, pdev);
 	if (ret != 0)
 		return -ENODEV;
-	
+
 	kirin_pcie_get_eyeparam(pcie, pdev);
-	
+
 	pcie->gpio_id_reset[0] = of_get_named_gpio(pdev->dev.of_node,
 			"switch,reset-gpios", 0);
 	pcie->gpio_id_reset[1] = of_get_named_gpio(pdev->dev.of_node,
@@ -711,7 +744,7 @@ static int kirin970_pcie_probe(struct kirin_pcie *pcie)
 			"m_2,reset-gpios", 0);
 	pcie->gpio_id_reset[3] = of_get_named_gpio(pdev->dev.of_node,
 			"mini1,reset-gpios", 0);
-	
+
 	if (pcie->gpio_id_reset[0] < 0)
 		return -ENODEV;
 	if (pcie->gpio_id_reset[1] < 0)
@@ -720,7 +753,7 @@ static int kirin970_pcie_probe(struct kirin_pcie *pcie)
 		return -ENODEV;
 	if (pcie->gpio_id_reset[3] < 0)
 		return -ENODEV;
-	
+
 	if (gpio_request((unsigned int)pcie->gpio_id_reset[0], "pcie_switch_reset"))
 		return -EINVAL;
 	if (gpio_request((unsigned int)pcie->gpio_id_reset[1], "pcie_eth_reset"))
@@ -729,16 +762,11 @@ static int kirin970_pcie_probe(struct kirin_pcie *pcie)
 		return -EINVAL;
 	if (gpio_request((unsigned int)pcie->gpio_id_reset[3], "pcie_mini1_reset"))
 		return -EINVAL;
-	
+
 	pcie->ldo33 = devm_regulator_get(pp->dev, "ldo33");
 	if(IS_ERR_OR_NULL(pcie->ldo33))
 		return PTR_ERR(pcie->ldo33);
 
-	ret = regulator_enable(pcie->ldo33);
-	if (ret) {
-		dev_err(pp->dev, "Failed to enable ldo33\n");
-		return ret;
-	}
 
 	ret = kirin970_pcie_pinctrl_init(pcie, pdev);
 	if (ret != 0)
@@ -762,12 +790,107 @@ static int kirin970_pcie_probe(struct kirin_pcie *pcie)
 	if (gpio_request((unsigned int)pcie->gpio_id_clkreq[2], "pcie_mini1_clkreq"))
 		return -EINVAL;
 
+	mutex_init(&pcie->power_lock);
+
 	ret = kirin970_pcie_power_on(pcie, true);
 	if (ret)
 		return ret;
 
 	return 0;
 }
+
+#define ETH_DEVICE 0x8168
+#define ETH_VENDOR 0x10ec
+
+static bool pcie_can_sleep(struct kirin_pcie *pcie)
+{
+	struct pci_dev *dev = NULL;
+	int type;
+
+	for_each_pci_dev(dev) {
+		if (dev) {
+			type = pci_pcie_type(dev);
+			if ((type == PCI_EXP_TYPE_ENDPOINT) || (type == PCI_EXP_TYPE_LEG_END)) {
+				if ((dev->device != ETH_DEVICE) || (dev->vendor != ETH_VENDOR))
+					return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+static int kirin970_pcie_usr_suspend(struct kirin_pcie *pcie)
+{
+	int ret;
+	struct pcie_port *pp;
+
+	pp = &pcie->pp;
+
+	if (atomic_read(&(pcie->usr_suspend)) || !atomic_read(&(pcie->is_power_on))) {
+		dev_err(pp->dev, "Already suspend by EP\n");
+		return -EINVAL;
+	}
+
+	ret = kirin970_pcie_power_on(pcie, false);
+	if (ret) {
+		dev_err(pp->dev, "Failed to power off\n");
+		return ret;
+	}
+
+	atomic_set(&(pcie->usr_suspend), 1);
+	return 0;
+}
+
+static int kirin970_pcie_usr_resume(struct kirin_pcie *pcie)
+{
+	int ret;
+	struct pcie_port *pp;
+	struct pci_dev *rc_dev;
+
+	pp = &pcie->pp;
+	rc_dev = pcie->rc_dev;
+
+	atomic_set(&(pcie->usr_suspend), 0);
+
+	if (kirin970_pcie_power_on(pcie, true)) {
+		dev_err(pp->dev, "Failed to power on\n");
+		atomic_set(&(pcie->usr_suspend), 1);
+		return -EINVAL;
+	}
+
+	ret = kirin_pcie_establish_link(&pcie->pp);
+	if (ret) {
+		if (kirin970_pcie_power_on(pcie, false))
+			dev_err(pp->dev, "Failed to power off\n");
+		atomic_set(&(pcie->usr_suspend), 1);
+		return -EINVAL;
+	}
+
+	if (rc_dev)
+		kirin_pcie_restore_rc_cfg(pcie);
+
+	return 0;
+}
+
+
+
+int kirin970_pcie_pm_control(int power_ops)
+{
+	struct kirin_pcie *pcie = g_kirin_pcie;
+
+	if (power_ops) {
+		return kirin970_pcie_usr_resume(pcie);
+	} else {
+		if (!pcie_can_sleep(pcie))
+			return -1;
+
+		pci_remove_root_bus(pcie->rc_dev->bus);
+
+		return kirin970_pcie_usr_suspend(pcie);
+	}
+}
+EXPORT_SYMBOL_GPL(kirin970_pcie_pm_control);
 
 static int kirin970_pcie_resume_noirq(struct device *dev)
 {
@@ -783,13 +906,15 @@ static int kirin970_pcie_resume_noirq(struct device *dev)
 	pp = &pcie->pp;
 	rc_dev = pcie->rc_dev;
 
-	if (kirin970_pcie_power_on(pcie, true)) {
-		dev_err(dev, "Failed to power on\n");
-		return -EINVAL;
-	}
+	if (!atomic_read(&(pcie->usr_suspend))) {
+		if (kirin970_pcie_power_on(pcie, true)) {
+			dev_err(dev, "Failed to power on\n");
+			return -EINVAL;
+		}
 
-	if (rc_dev)
-		kirin_pcie_restore_rc_cfg(pcie);
+		if (rc_dev)
+			kirin_pcie_restore_rc_cfg(pcie);
+	}
 
 	return 0;
 }
@@ -809,12 +934,26 @@ static int kirin970_pcie_suspend_noirq(struct device *dev)
 	rc_dev = pcie->rc_dev;
 	pp = &pcie->pp;
 
-	if (kirin970_pcie_power_on(pcie, false)) {
-		dev_err(dev, "Failed to power off\n");
-		return -EINVAL;
+	if (atomic_read(&(pcie->is_power_on))) {
+		if (!atomic_read(&(pcie->usr_suspend))) {
+			if (kirin970_pcie_power_on(pcie, false)) {
+				dev_err(dev, "Failed to power off\n");
+				return -EINVAL;
+			}
+		}
 	}
 
 	return 0;
+}
+
+static void kirin970_pcie_shutdown(struct kirin_pcie *pcie)
+{
+	if (atomic_read(&(pcie->is_power_on))) {
+		if (kirin970_pcie_power_on(pcie, false)) {
+			dev_err(pcie->pp.dev, "Failed to power off\n");
+			return;
+		}
+	}
 }
 
 const struct kirin_pcie_ops kirin970_pcie_ops = {
@@ -823,6 +962,8 @@ const struct kirin_pcie_ops kirin970_pcie_ops = {
 	.kirin_phy_readl = kirin970_phy_readl,
 	.pcie_suspend_noirq = kirin970_pcie_suspend_noirq,
 	.pcie_resume_noirq = kirin970_pcie_resume_noirq,
+	.pcie_pm_control = kirin970_pcie_pm_control,
+	.pcie_shutdown = kirin970_pcie_shutdown,
 };
 
  EXPORT_SYMBOL_GPL(kirin970_pcie_ops);

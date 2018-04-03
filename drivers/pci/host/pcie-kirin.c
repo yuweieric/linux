@@ -105,13 +105,14 @@ static int kirin_pcie_link_up(struct pcie_port *pp)
 	struct kirin_pcie *pcie = to_kirin_pcie(pp);
 	u32 val = kirin_elb_readl(pcie, SOC_PCIECTRL_STATE0_ADDR);
 
+
 	if ((val & PCIE_LINKUP_ENABLE) == PCIE_LINKUP_ENABLE)
 		return 1;
 
 	return 0;
 }
 
-static int kirin_pcie_establish_link(struct pcie_port *pp)
+int kirin_pcie_establish_link(struct pcie_port *pp)
 {
 	int count = 0;
 
@@ -270,6 +271,21 @@ int kirin_pcie_restore_rc_cfg(struct kirin_pcie *pcie)
 	return 0;
 }
 
+int kirin_pcie_pm_control(int power_ops)
+{
+	struct kirin_pcie *pcie;
+	int (*pm_control)(int);
+
+	pcie = g_kirin_pcie;
+	pm_control = pcie->pcie_ops->pcie_pm_control;
+	if (!pm_control)
+		return -1;
+
+	return pm_control(power_ops);
+}
+EXPORT_SYMBOL_GPL(kirin_pcie_pm_control);
+
+
 static int kirin_pcie_probe(struct platform_device *pdev)
 {
 	struct kirin_pcie *pcie;
@@ -326,6 +342,7 @@ static int kirin_pcie_probe(struct platform_device *pdev)
 	}
 
 	ret = kirin_pcie_save_rc_cfg(pcie);
+	atomic_set(&(pcie->usr_suspend), 0);
 
 	return 0;
 }
@@ -353,10 +370,11 @@ static int kirin_pcie_resume_noirq(struct device *dev)
 	if (ret)
 		return ret;
 
-	ret = kirin_pcie_establish_link(&(pcie->pp));
-	if (ret)
-		return ret;
-
+	if (!atomic_read(&(pcie->usr_suspend))) {
+		ret = kirin_pcie_establish_link(&(pcie->pp));
+		if (ret)
+			return ret;
+	}
 	return 0;
 }
 
@@ -393,6 +411,19 @@ static int kirin_pcie_suspend_noirq(struct device *dev)
 
 #endif
 
+static void kirin_pcie_shutdown(struct platform_device *pdev)
+{
+	struct kirin_pcie *pcie;
+
+	pcie = dev_get_drvdata(&(pdev->dev));
+	if (pcie == NULL) {
+		dev_err(&pdev->dev, "Failed to get drvdata\n");
+		return;
+	}
+
+	pcie->pcie_ops->pcie_shutdown(pcie);
+}
+
 static const struct dev_pm_ops kirin_pcie_dev_pm_ops = {
 	.suspend_noirq	= kirin_pcie_suspend_noirq,
 	.resume_noirq		= kirin_pcie_resume_noirq,
@@ -414,6 +445,7 @@ MODULE_DEVICE_TABLE(of, kirin_pcie_match);
 
 struct platform_driver kirin_pcie_driver = {
 	.probe			= kirin_pcie_probe,
+	.shutdown		= kirin_pcie_shutdown,
 	.driver			= {
 		.name			= "Kirin-pcie",
 		.owner			= THIS_MODULE,

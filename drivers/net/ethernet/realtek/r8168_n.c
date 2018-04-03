@@ -86,6 +86,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #endif
+#include <linux/workqueue.h>
 
 /* Maximum number of multicast addresses to filter (vs. Rx-all-multicast).
    The RTL chips use a 64 element hash table based on the Ethernet CRC. */
@@ -442,6 +443,18 @@ static void rtl8168_hw_reset(struct net_device *dev);
 static void rtl8168_phy_power_up(struct net_device *dev);
 static void rtl8168_phy_power_down(struct net_device *dev);
 static int rtl8168_set_speed(struct net_device *dev, u8 autoneg,  u32 speed, u8 duplex);
+
+#ifdef CONFIG_PCIE_KIRIN
+extern int kirin_pcie_pm_control(int power_ops);
+#endif
+
+static unsigned int remove_work_count = 1;
+static struct work_struct remove_work;
+static void
+rtl8168_remove_work(struct work_struct *work)
+{
+	kirin_pcie_pm_control(0);
+}
 
 #ifdef CONFIG_R8168_NAPI
 static int rtl8168_poll(napi_ptr napi, napi_budget budget);
@@ -3543,7 +3556,16 @@ rtl8168_check_link_status(struct net_device *dev)
                         }
                         break;
                 }
-        }
+#ifdef CONFIG_PCIE_KIRIN
+			remove_work_count++;
+			if (remove_work_count > 6) {
+				INIT_WORK(&remove_work, rtl8168_remove_work);
+				schedule_work(&remove_work);
+			}
+		} else {
+			remove_work_count = 0;
+#endif
+	}
 }
 
 static void

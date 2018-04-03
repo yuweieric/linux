@@ -91,6 +91,9 @@ struct kirin_pcie {
 	struct pci_saved_state      *rc_saved_state;
 	const struct kirin_pcie_ops *pcie_ops;
 	struct regulator            *ldo33;
+	atomic_t		is_power_on;
+	atomic_t		usr_suspend;
+	struct mutex		power_lock;
 };
 
 struct kirin_pcie_ops {
@@ -99,6 +102,8 @@ struct kirin_pcie_ops {
 	int (*pcie_resume_noirq)(struct device *dev);
 	void (*kirin_phy_writel)(struct kirin_pcie *pcie, u32 val, u32 reg);
 	u32 (*kirin_phy_readl)(struct kirin_pcie *pcie, u32 reg);
+	int (*pcie_pm_control)(int power_ops);
+	void (*pcie_shutdown)(struct kirin_pcie *pcie);
 };
 
 static inline void kirin_elb_writel(struct kirin_pcie *pcie, u32 val, u32 reg)
@@ -133,7 +138,9 @@ static inline u32 kirin_natural_phy_readl(struct kirin_pcie *pcie, u32 reg)
 
 int kirin_pcie_save_rc_cfg(struct kirin_pcie *pcie);
 int kirin_pcie_restore_rc_cfg(struct kirin_pcie *pcie);
+int kirin_pcie_establish_link(struct pcie_port *pp);
 
+extern struct kirin_pcie *g_kirin_pcie;
 extern const struct kirin_pcie_ops kirin960_pcie_ops;
 extern const struct kirin_pcie_ops kirin970_pcie_ops;
 #endif
