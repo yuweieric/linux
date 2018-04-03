@@ -139,11 +139,6 @@ static inline struct hikey_panel *to_hikey_panel(struct drm_panel *panel)
 	return container_of(panel, struct hikey_panel, base);
 }
 
-static inline struct hikey_panel *bl_to_hikey_panel(struct backlight_device *backlight)
-{
-	return container_of(backlight, struct hikey_panel, backlight);
-}
-
 int hisi_lcd_backlight_on(struct drm_panel *p)
 {
 	struct hikey_panel *panel = to_hikey_panel(p);
@@ -294,16 +289,7 @@ static int hisi_bl_get_brightness(struct backlight_device *bl)
 
 static int hisi_bl_update_status(struct backlight_device *bl)
 {
-	struct mipi_dsi_device *dsi = bl_get_data(bl);
-	struct hikey_panel *panel = bl_to_hikey_panel(bl);
-	struct dsi_panel_cmd *cmd;
 	int bl_level;
-	int ret;
-
-	u8 data[] = {0};
-	struct dsi_panel_cmd bl_cmd[] = {
-		{0x51, sizeof(data), data},
-	};
 
 	bl_level = bl->props.brightness;
 	DRM_INFO("bl_level is %d\n", bl_level);
@@ -367,7 +353,6 @@ static void hikey_panel_del(struct hikey_panel *panel)
 static int hikey_panel_parse_dt(struct hikey_panel *panel)
 {
 	struct device *dev = &panel->dsi->dev;
-	struct device_node *backlight;
 	int ret = 0;
 
 	panel->gpio_pwr_en =
