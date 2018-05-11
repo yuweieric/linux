@@ -75,7 +75,6 @@ int ipu_clock_init(struct device *dev, struct ics_clock *clk, bool lpm3_set_vcod
 
 static int ipu_clock_set(struct ics_clock *clk, unsigned int new_rate)
 {
-	int ret;
 	unsigned int target_rate = new_rate;
 
 	if (new_rate == clk->curr_rate) {

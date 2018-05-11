@@ -2519,7 +2519,7 @@ static int cambricon_ipu_probe(struct platform_device *pdev)
 		err = -ENXIO;
 		goto release_res_cfg;
 	}
-	IOREAD_RANGE(adapter->config_reg_virt_addr, 0xff);
+	// IOREAD_RANGE(adapter->config_reg_virt_addr, 0xff);
 
 	if (!ipu_get_feature_tree(&pdev->dev)) {
 		printk(KERN_ERR"[%s]: fatal err, unknown feature tree\n", __func__);
@@ -2574,7 +2574,7 @@ static int cambricon_ipu_probe(struct platform_device *pdev)
 		printk(KERN_ERR"[%s]IPU_ERROR:ics_irq_io_addr ioremap fail\n", __func__);
 		goto destroy_device;
 	}
-	IOREAD_RANGE(adapter->ics_irq_io_addr, 0xff);
+	// IOREAD_RANGE(adapter->ics_irq_io_addr, 0xff);
 #endif
 
 	if (!ipu_smmu_master_get_offset(&pdev->dev)) {

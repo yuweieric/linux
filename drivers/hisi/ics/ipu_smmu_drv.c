@@ -587,10 +587,6 @@ long ipu_smmu_map(struct map_data *map)
 	iova_size = phys_len;
 	iova_start = ipu_alloc_iova(ipu_iova_pool, iova_size);
 
-	unsigned long smmu_scr_addr = (unsigned long)smmu_manager.common_io_addr + smmu_common_reg_offset.smmu_scr;
-
-	unsigned long smmu_mint_addr = (unsigned long)smmu_manager.master_io_addr + smmu_master_reg_offset.smmu_mstr_intmask;
-
 	sg_size = iommu_map_sg(ipu_smmu_domain, iova_start, sgl,
 			(unsigned int)sg_nents(sgl), format->prot);
 
