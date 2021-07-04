@@ -83,3 +83,9 @@ SCHED_FEAT(ENERGY_AWARE, true)
 #else
 SCHED_FEAT(ENERGY_AWARE, false)
 #endif
+
+/*
+ * UtilEstimation. Use estimated CPU utilization.
+ */
+SCHED_FEAT(UTIL_EST, true)
+SCHED_FEAT(UTIL_EST_FASTUP, true)

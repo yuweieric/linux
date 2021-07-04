@@ -88,8 +88,6 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
-#include "pelt.h"
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 #include "walt.h"
@@ -105,14 +103,8 @@ void update_rq_clock(struct rq *rq)
 
 	lockdep_assert_held(&rq->lock);
 
-	if (rq->clock_update_flags & RQCF_ACT_SKIP)
+	if (rq->clock_skip_update & RQCF_ACT_SKIP)
 		return;
-
-#ifdef CONFIG_SCHED_DEBUG
-	if (sched_feat(WARN_DOUBLE_CLOCK))
-		SCHED_WARN_ON(rq->clock_update_flags & RQCF_UPDATED);
-	rq->clock_update_flags |= RQCF_UPDATED;
-#endif
 
 	delta = sched_clock_cpu(cpu_of(rq)) - rq->clock;
 	if (delta < 0)
@@ -690,6 +682,23 @@ bool sched_can_stop_tick(struct rq *rq)
 	return true;
 }
 #endif /* CONFIG_NO_HZ_FULL */
+
+void sched_avg_update(struct rq *rq)
+{
+	s64 period = sched_avg_period();
+
+	while ((s64)(rq_clock(rq) - rq->age_stamp) > period) {
+		/*
+		 * Inline assembly required to prevent the compiler
+		 * optimising this loop into a divmod call.
+		 * See __iter_div_u64_rem() for another example of this.
+		 */
+		asm("" : "+rm" (rq->age_stamp));
+		rq->age_stamp += period;
+		rq->rt_avg /= 2;
+	}
+}
+
 #endif /* CONFIG_SMP */
 
 #if defined(CONFIG_RT_GROUP_SCHED) || (defined(CONFIG_FAIR_GROUP_SCHED) && \
@@ -737,7 +746,7 @@ int tg_nop(struct task_group *tg, void *data)
 }
 #endif
 
-static void set_load_weight(struct task_struct *p, bool update_load)
+static void set_load_weight(struct task_struct *p)
 {
 	int prio = p->static_prio - MAX_RT_PRIO;
 	struct load_weight *load = &p->se.load;
@@ -748,28 +757,16 @@ static void set_load_weight(struct task_struct *p, bool update_load)
 	if (idle_policy(p->policy)) {
 		load->weight = scale_load(WEIGHT_IDLEPRIO);
 		load->inv_weight = WMULT_IDLEPRIO;
-		p->se.runnable_weight = load->weight;
 		return;
 	}
 
-	/*
-	 * SCHED_OTHER tasks have to update their load when changing their
-	 * weight
-	 */
-	if (update_load && p->sched_class == &fair_sched_class) {
-		reweight_task(p, prio);
-	} else {
-		load->weight = scale_load(sched_prio_to_weight[prio]);
-		load->inv_weight = sched_prio_to_wmult[prio];
-		p->se.runnable_weight = load->weight;
-	}
+	load->weight = scale_load(sched_prio_to_weight[prio]);
+	load->inv_weight = sched_prio_to_wmult[prio];
 }
 
 static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 {
-	if (!(flags & ENQUEUE_NOCLOCK))
-		update_rq_clock(rq);
-
+	update_rq_clock(rq);
 	if (!(flags & ENQUEUE_RESTORE))
 		sched_info_queued(rq, p);
 	p->sched_class->enqueue_task(rq, p, flags);
@@ -777,9 +774,7 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 
 static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 {
-	if (!(flags & DEQUEUE_NOCLOCK))
-		update_rq_clock(rq);
-
+	update_rq_clock(rq);
 	if (!(flags & DEQUEUE_SAVE))
 		sched_info_dequeued(rq, p);
 	p->sched_class->dequeue_task(rq, p, flags);
@@ -807,8 +802,9 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
  * In theory, the compile should just see 0 here, and optimize out the call
  * to sched_rt_avg_update. But I don't trust it...
  */
-	s64 __maybe_unused steal = 0, irq_delta = 0;
-
+#if defined(CONFIG_IRQ_TIME_ACCOUNTING) || defined(CONFIG_PARAVIRT_TIME_ACCOUNTING)
+	s64 steal = 0, irq_delta = 0;
+#endif
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
 	irq_delta = irq_time_read(cpu_of(rq)) - rq->prev_irq_time;
 
@@ -848,11 +844,10 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
 
 	rq->clock_task += delta;
 
-#ifdef CONFIG_HAVE_SCHED_AVG_IRQ
+#if defined(CONFIG_IRQ_TIME_ACCOUNTING) || defined(CONFIG_PARAVIRT_TIME_ACCOUNTING)
 	if ((irq_delta + steal) && sched_feat(NONTASK_CAPACITY))
-		update_irq_load_avg(rq, irq_delta + steal);
+		sched_rt_avg_update(rq, irq_delta + steal);
 #endif
-	update_rq_clock_pelt(rq, delta);
 }
 
 void sched_set_stop_task(int cpu, struct task_struct *stop)
@@ -986,7 +981,7 @@ void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags)
 	 * this case, we can save a useless back to back clock update.
 	 */
 	if (task_on_rq_queued(rq->curr) && test_tsk_need_resched(rq->curr))
-		rq_clock_skip_update(rq);
+		rq_clock_skip_update(rq, true);
 }
 
 #ifdef CONFIG_SMP
@@ -1014,7 +1009,7 @@ static struct rq *move_queued_task(struct rq *rq, struct task_struct *p, int new
 	lockdep_assert_held(&rq->lock);
 
 	p->on_rq = TASK_ON_RQ_MIGRATING;
-	dequeue_task(rq, p, DEQUEUE_NOCLOCK);
+	dequeue_task(rq, p, 0);
 	double_lock_balance(rq, cpu_rq(new_cpu));
 	set_task_cpu(p, new_cpu);
 	double_unlock_balance(rq, cpu_rq(new_cpu));
@@ -1054,7 +1049,6 @@ static struct rq *__migrate_task(struct rq *rq, struct task_struct *p, int dest_
 	if (!cpumask_test_cpu(dest_cpu, tsk_cpus_allowed(p)))
 		return rq;
 
-	update_rq_clock(rq);
 	rq = move_queued_task(rq, p, dest_cpu);
 
 	return rq;
@@ -1129,7 +1123,7 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 		 * holding rq->lock.
 		 */
 		lockdep_assert_held(&rq->lock);
-		dequeue_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
+		dequeue_task(rq, p, DEQUEUE_SAVE);
 	}
 	if (running)
 		put_prev_task(rq, p);
@@ -1137,7 +1131,7 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 	p->sched_class->set_cpus_allowed(p, new_mask);
 
 	if (queued)
-		enqueue_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
+		enqueue_task(rq, p, ENQUEUE_RESTORE);
 	if (running)
 		set_curr_task(rq, p);
 }
@@ -2446,7 +2440,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->static_prio = NICE_TO_PRIO(0);
 
 		p->prio = p->normal_prio = __normal_prio(p);
-		set_load_weight(p, false);
+		set_load_weight(p);
 
 		/*
 		 * We don't need the reset flag anymore after the fork. It has
@@ -2630,11 +2624,11 @@ void wake_up_new_task(struct task_struct *p)
 #endif
 	rq = __task_rq_lock(p, &rf);
 	update_rq_clock(rq);
-	post_init_entity_util_avg(p);
+	post_init_entity_util_avg(&p->se);
 
 	walt_mark_task_starting(p);
 
-	activate_task(rq, p, ENQUEUE_NOCLOCK);
+	activate_task(rq, p, ENQUEUE_WAKEUP_NEW);
 	p->on_rq = TASK_ON_RQ_QUEUED;
 	trace_sched_wakeup_new(p);
 	check_preempt_curr(rq, p, WF_FORK);
@@ -3053,7 +3047,7 @@ void get_iowait_load(unsigned long *nr_waiters, unsigned long *load)
 {
 	struct rq *rq = this_rq();
 	*nr_waiters = atomic_read(&rq->nr_iowait);
-	*load = rq->cfs.load.weight;
+	*load = rq->load.weight;
 }
 
 #ifdef CONFIG_SMP
@@ -3451,16 +3445,14 @@ static void __sched notrace __schedule(bool preempt)
 	raw_spin_lock(&rq->lock);
 	cookie = lockdep_pin_lock(&rq->lock);
 
-	/* Promote REQ to ACT */
-	rq->clock_update_flags <<= 1;
-	update_rq_clock(rq);
+	rq->clock_skip_update <<= 1; /* promote REQ to ACT */
 
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {
 		if (unlikely(signal_pending_state(prev->state, prev))) {
 			prev->state = TASK_RUNNING;
 		} else {
-			deactivate_task(rq, prev, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
+			deactivate_task(rq, prev, DEQUEUE_SLEEP);
 			prev->on_rq = 0;
 
 			/*
@@ -3479,13 +3471,16 @@ static void __sched notrace __schedule(bool preempt)
 		switch_count = &prev->nvcsw;
 	}
 
+	if (task_on_rq_queued(prev))
+		update_rq_clock(rq);
+
 	next = pick_next_task(rq, prev, cookie);
 	wallclock = walt_ktime_clock();
 	walt_update_task_ravg(prev, rq, PUT_PREV_TASK, wallclock, 0);
 	walt_update_task_ravg(next, rq, PICK_NEXT_TASK, wallclock, 0);
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
-	rq->clock_update_flags = 0;
+	rq->clock_skip_update = 0;
 
 	if (likely(prev != next)) {
 #ifdef CONFIG_SCHED_WALT
@@ -3740,7 +3735,7 @@ EXPORT_SYMBOL(default_wake_function);
  */
 void rt_mutex_setprio(struct task_struct *p, int prio)
 {
-	int oldprio, queued, running, queue_flag = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
+	int oldprio, queued, running, queue_flag = DEQUEUE_SAVE | DEQUEUE_MOVE;
 	const struct sched_class *prev_class;
 	struct rq_flags rf;
 	struct rq *rq;
@@ -3860,18 +3855,18 @@ void set_user_nice(struct task_struct *p, long nice)
 	queued = task_on_rq_queued(p);
 	running = task_current(rq, p);
 	if (queued)
-		dequeue_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
+		dequeue_task(rq, p, DEQUEUE_SAVE);
 	if (running)
 		put_prev_task(rq, p);
 
 	p->static_prio = NICE_TO_PRIO(nice);
-	set_load_weight(p, true);
+	set_load_weight(p);
 	old_prio = p->prio;
 	p->prio = effective_prio(p);
 	delta = p->prio - old_prio;
 
 	if (queued) {
-		enqueue_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
+		enqueue_task(rq, p, ENQUEUE_RESTORE);
 		/*
 		 * If the task increased its priority or is running and
 		 * lowered its priority, then reschedule its CPU:
@@ -4062,7 +4057,7 @@ static void __setscheduler_params(struct task_struct *p,
 	 */
 	p->rt_priority = attr->sched_priority;
 	p->normal_prio = normal_prio(p);
-	set_load_weight(p, true);
+	set_load_weight(p);
 }
 
 /* Actually do priority change: must hold pi & rq lock. */
@@ -4182,7 +4177,7 @@ static int __sched_setscheduler(struct task_struct *p,
 	const struct sched_class *prev_class;
 	struct rq_flags rf;
 	int reset_on_fork;
-	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
+	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE;
 	struct rq *rq;
 
 	/* may grab non-irq protected spin_locks */
@@ -5552,7 +5547,7 @@ void sched_setnuma(struct task_struct *p, int nid)
 	p->numa_preferred_nid = nid;
 
 	if (queued)
-		enqueue_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
+		enqueue_task(rq, p, ENQUEUE_RESTORE);
 	if (running)
 		set_curr_task(rq, p);
 	task_rq_unlock(rq, p, &rf);
@@ -5726,6 +5721,13 @@ static void set_rq_offline(struct rq *rq)
 		cpumask_clear_cpu(rq->cpu, rq->rd->online);
 		rq->online = 0;
 	}
+}
+
+static void set_cpu_rq_start_time(unsigned int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	rq->age_stamp = sched_clock_cpu(cpu);
 }
 
 static cpumask_var_t sched_domains_tmpmask; /* sched_domains_mutex */
@@ -7600,6 +7602,7 @@ static void sched_rq_cpu_starting(unsigned int cpu)
 
 int sched_cpu_starting(unsigned int cpu)
 {
+	set_cpu_rq_start_time(cpu);
 	sched_rq_cpu_starting(cpu);
 	return 0;
 }
@@ -7859,7 +7862,7 @@ void __init sched_init(void)
 		atomic_set(&rq->nr_iowait, 0);
 	}
 
-	set_load_weight(&init_task, false);
+	set_load_weight(&init_task);
 
 	/*
 	 * The boot idle thread does lazy MMU switching as well:
@@ -7883,6 +7886,7 @@ void __init sched_init(void)
 	if (cpu_isolated_map == NULL)
 		zalloc_cpumask_var(&cpu_isolated_map, GFP_NOWAIT);
 	idle_thread_set_boot_cpu();
+	set_cpu_rq_start_time(smp_processor_id());
 #endif
 	init_sched_fair_class();
 
@@ -8165,8 +8169,7 @@ static void sched_change_group(struct task_struct *tsk, int type)
  */
 void sched_move_task(struct task_struct *tsk)
 {
-	int queued, running, queue_flags =
-		DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
+	int queued, running;
 	struct rq_flags rf;
 	struct rq *rq;
 
@@ -8177,14 +8180,14 @@ void sched_move_task(struct task_struct *tsk)
 	queued = task_on_rq_queued(tsk);
 
 	if (queued)
-		dequeue_task(rq, tsk, queue_flags);
+		dequeue_task(rq, tsk, DEQUEUE_SAVE | DEQUEUE_MOVE);
 	if (unlikely(running))
 		put_prev_task(rq, tsk);
 
 	sched_change_group(tsk, TASK_MOVE_GROUP);
 
 	if (queued)
-		enqueue_task(rq, tsk, queue_flags);
+		enqueue_task(rq, tsk, ENQUEUE_RESTORE | ENQUEUE_MOVE);
 	if (unlikely(running))
 		set_curr_task(rq, tsk);
 

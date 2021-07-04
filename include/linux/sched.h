@@ -1326,6 +1326,12 @@ struct load_weight {
 	u32 inv_weight;
 };
 
+struct util_est {
+	unsigned int			enqueued;
+	unsigned int			ewma;
+#define UTIL_EST_WEIGHT_SHIFT		2
+} __attribute__((__aligned__(sizeof(u64))));
+
 /*
  * The load_avg/util_avg accumulates an infinite geometric series
  * (see __update_load_avg() in kernel/sched/fair.c).
@@ -1338,12 +1344,6 @@ struct load_weight {
  * For cfs_rq, it is the aggregated load_avg of all runnable and
  * blocked sched_entities.
  *
- * load_avg may also take frequency scaling into account:
- *
- *   load_avg = runnable% * scale_load_down(load) * freq%
- *
- * where freq% is the CPU frequency normalized to the highest frequency.
- *
  * [util_avg definition]
  *
  *   util_avg = running% * SCHED_CAPACITY_SCALE
@@ -1352,17 +1352,14 @@ struct load_weight {
  * a CPU. For cfs_rq, it is the aggregated util_avg of all runnable
  * and blocked sched_entities.
  *
- * util_avg may also factor frequency scaling and CPU capacity scaling:
+ * load_avg and util_avg don't direcly factor frequency scaling and CPU
+ * capacity scaling. The scaling is done through the rq_clock_pelt that
+ * is used for computing those signals (see update_rq_clock_pelt())
  *
- *   util_avg = running% * SCHED_CAPACITY_SCALE * freq% * capacity%
- *
- * where freq% is the same as above, and capacity% is the CPU capacity
- * normalized to the greatest capacity (due to uarch differences, etc).
- *
- * N.B., the above ratios (runnable%, running%, freq%, and capacity%)
- * themselves are in the range of [0, 1]. To do fixed point arithmetics,
- * we therefore scale them to as large a range as necessary. This is for
- * example reflected by util_avg's SCHED_CAPACITY_SCALE.
+ * N.B., the above ratios (runnable% and running%) themselves are in the
+ * range of [0, 1]. To do fixed point arithmetics, we therefore scale them
+ * to as large a range as necessary. This is for example reflected by
+ * util_avg's SCHED_CAPACITY_SCALE.
  *
  * [Overflow issue]
  *
@@ -1379,9 +1376,15 @@ struct load_weight {
  * issues.
  */
 struct sched_avg {
-	u64 last_update_time, load_sum;
-	u32 util_sum, period_contrib;
-	unsigned long load_avg, util_avg;
+	u64				last_update_time;
+	u64				load_sum;
+	u64				runnable_load_sum;
+	u32				util_sum;
+	u32				period_contrib;
+	unsigned long			load_avg;
+	unsigned long			runnable_load_avg;
+	unsigned long			util_avg;
+	struct util_est			util_est;
 };
 
 #ifdef CONFIG_SCHEDSTATS
@@ -1486,6 +1489,7 @@ struct ravg {
 
 struct sched_entity {
 	struct load_weight	load;		/* for load-balancing */
+	unsigned long			runnable_weight;
 	struct rb_node		run_node;
 	struct list_head	group_node;
 	unsigned int		on_rq;
@@ -3769,6 +3773,7 @@ static inline unsigned long rlimit_max(unsigned int limit)
 #define SCHED_CPUFREQ_RT	(1U << 0)
 #define SCHED_CPUFREQ_DL	(1U << 1)
 #define SCHED_CPUFREQ_IOWAIT	(1U << 2)
+#define SCHED_CPUFREQ_MIGRATION	(1U << 3)
 
 #define SCHED_CPUFREQ_RT_DL	(SCHED_CPUFREQ_RT | SCHED_CPUFREQ_DL)
 
@@ -3782,5 +3787,17 @@ void cpufreq_add_update_util_hook(int cpu, struct update_util_data *data,
 				    unsigned int flags));
 void cpufreq_remove_update_util_hook(int cpu);
 #endif /* CONFIG_CPU_FREQ */
+
+//const struct sched_avg *sched_trace_cfs_rq_avg(struct cfs_rq *cfs_rq);
+char *sched_trace_cfs_rq_path(struct cfs_rq *cfs_rq, char *str, int len);
+int sched_trace_cfs_rq_cpu(struct cfs_rq *cfs_rq);
+
+//const struct sched_avg *sched_trace_rq_avg_rt(struct rq *rq);
+//const struct sched_avg *sched_trace_rq_avg_dl(struct rq *rq);
+//const struct sched_avg *sched_trace_rq_avg_irq(struct rq *rq);
+
+//int sched_trace_rq_cpu(struct rq *rq);
+
+// const struct cpumask *sched_trace_rd_span(struct root_domain *rd);
 
 #endif

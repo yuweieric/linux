@@ -778,7 +778,7 @@ static void update_curr_dl(struct rq *rq)
 	curr->se.exec_start = rq_clock_task(rq);
 	cpuacct_charge(curr, delta_exec);
 
-	sched_rt_avg_update(rq, delta_exec);
+//	sched_rt_avg_update(rq, delta_exec);
 
 	dl_se->runtime -= delta_exec;
 
@@ -1058,7 +1058,7 @@ static void yield_task_dl(struct rq *rq)
 	 * so we don't do microscopic update in schedule()
 	 * and double the fastpath cost.
 	 */
-	rq_clock_skip_update(rq, true);
+	rq_clock_skip_update(rq);
 }
 
 #ifdef CONFIG_SMP
