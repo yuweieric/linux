@@ -209,16 +209,11 @@ static void sugov_get_util(unsigned long *util, unsigned long *max, u64 time)
 
 	max_cap = arch_scale_cpu_capacity(NULL, cpu);
 
-	sched_avg_update(rq);
-	delta = time - rq->age_stamp;
-	if (unlikely(delta < 0))
-		delta = 0;
-	rt = div64_u64(rq->rt_avg, sched_avg_period() + delta);
-	rt = (rt * max_cap) >> SCHED_CAPACITY_SHIFT;
+//	sched_avg_update(rq);
 
 	*util = boosted_cpu_util(cpu);
-	if (likely(use_pelt()))
-		*util = min((*util + rt), max_cap);
+//	if (likely(use_pelt()))
+//		*util = min((*util + rt), max_cap);
 
 	*max = max_cap;
 }
