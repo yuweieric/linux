@@ -54,6 +54,9 @@ DEFINE_EVENT(preemptirq_template, preempt_enable,
 
 #endif /* _TRACE_PREEMPTIRQ_H */
 
+#define trace_preempt_enable_rcuidle(...)
+#define trace_preempt_disable_rcuidle(...)
+
 #include <trace/define_trace.h>
 
 #else /* !CONFIG_PREEMPTIRQ_EVENTS */

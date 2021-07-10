@@ -598,7 +598,7 @@ static inline long se_runnable(struct sched_entity *se)
 /*
  * For asym packing, by default the lower numbered CPU has higher priority.
  */
-int arch_asym_cpu_priority(int cpu)
+static inline int arch_asym_cpu_priority(int cpu)
 {
 	return -cpu;
 }

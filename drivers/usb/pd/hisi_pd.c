@@ -37,6 +37,7 @@
 #include <linux/mutex.h>
 #include <linux/version.h>
 #include <linux/extcon.h>
+#include <linux/of.h>
 #include <linux/hisi/log/hisi_log.h>
 #include <linux/hisi/usb/hisi_pd_dev.h>
 #include <linux/hisi/usb/pd/richtek/tcpm.h>
