@@ -570,6 +570,7 @@ unlock:
 	rcu_read_unlock();
 	return cpu;
 }
+
 /*
  * When add_timer_on() enqueues a timer into the timer wheel of an
  * idle CPU then this timer might expire before the next timer event
@@ -1070,6 +1071,10 @@ static int migration_cpu_stop(void *data)
 	struct migration_arg *arg = data;
 	struct task_struct *p = arg->task;
 	struct rq *rq = this_rq();
+#ifdef CONFIG_SCHED_WALT
+	int src_cpu = cpu_of(rq);
+	bool moved = false;
+#endif
 
 	/*
 	 * The original target cpu might have gone down and we might
@@ -1091,15 +1096,26 @@ static int migration_cpu_stop(void *data)
 	 * we're holding p->pi_lock.
 	 */
 	if (task_rq(p) == rq) {
-		if (task_on_rq_queued(p))
+		if (task_on_rq_queued(p)) {
 			rq = __migrate_task(rq, p, arg->dest_cpu);
-		else
+#ifdef CONFIG_HISI_EAS_SCHED
+			moved = true;
+#endif
+		} else
 			p->wake_cpu = arg->dest_cpu;
 	}
 	raw_spin_unlock(&rq->lock);
 	raw_spin_unlock(&p->pi_lock);
 
 	local_irq_enable();
+
+#ifdef CONFIG_SCHED_WALT
+	if (moved) {
+		sugov_check_freq_update(arg->dest_cpu);
+		sugov_check_freq_update(src_cpu);
+	}
+#endif
+
 	return 0;
 }
 
@@ -2014,6 +2030,21 @@ static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
  *
  */
 
+#ifdef CONFIG_SCHED_WALT
+/* utility function to update walt signals at wakeup */
+static inline void walt_try_to_wake_up(struct task_struct *p)
+{
+	struct rq *rq = cpu_rq(task_cpu(p));
+	u64 wallclock;
+
+	raw_spin_lock(&rq->lock);
+	wallclock = walt_ktime_clock();
+	walt_update_task_ravg(rq->curr, rq, TASK_UPDATE, wallclock, 0);
+	walt_update_task_ravg(p, rq, TASK_WAKE, wallclock, 0);
+	raw_spin_unlock(&rq->lock);
+}
+#endif
+
 /**
  * try_to_wake_up - wake up a thread
  * @p: the thread to be awakened
@@ -2037,6 +2068,9 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 #ifdef CONFIG_SMP
 	struct rq *rq;
 	u64 wallclock;
+#endif
+#ifdef CONFIG_SCHED_WALT
+	int src_cpu = -1;
 #endif
 
 	/*
@@ -2111,19 +2145,16 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 */
 	smp_cond_load_acquire(&p->on_cpu, !VAL);
 
-	rq = cpu_rq(task_cpu(p));
-
-	raw_spin_lock(&rq->lock);
-	wallclock = walt_ktime_clock();
-	walt_update_task_ravg(rq->curr, rq, TASK_UPDATE, wallclock, 0);
-	walt_update_task_ravg(p, rq, TASK_WAKE, wallclock, 0);
-	raw_spin_unlock(&rq->lock);
-
 	p->sched_contributes_to_load = !!task_contributes_to_load(p);
 	p->state = TASK_WAKING;
 
 	cpu = select_task_rq(p, p->wake_cpu, SD_BALANCE_WAKE, wake_flags);
 
+#ifdef CONFIG_SCHED_WALT
+	walt_try_to_wake_up(p);
+
+	src_cpu = task_cpu(p);
+#endif
 	if (task_cpu(p) != cpu) {
 		wake_flags |= WF_MIGRATED;
 		set_task_cpu(p, cpu);
@@ -2136,6 +2167,14 @@ stat:
 	ttwu_stat(p, cpu, wake_flags);
 out:
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
+
+#ifdef CONFIG_SCHED_WALT
+	if (success) {
+		sugov_check_freq_update(cpu);
+		if (src_cpu != -1 && src_cpu != cpu)
+			sugov_check_freq_update(src_cpu);
+	}
+#endif
 
 	return success;
 }
@@ -3185,6 +3224,9 @@ void scheduler_tick(void)
 
 	if (curr->sched_class == &fair_sched_class)
 		check_for_migration(rq, curr);
+#ifdef CONFIG_SCHED_WALT
+	sugov_check_freq_update(cpu);
+#endif
 }
 
 #ifdef CONFIG_NO_HZ_FULL
@@ -3483,6 +3525,9 @@ static void __sched notrace __schedule(bool preempt)
 	wallclock = walt_ktime_clock();
 	walt_update_task_ravg(prev, rq, PUT_PREV_TASK, wallclock, 0);
 	walt_update_task_ravg(next, rq, PICK_NEXT_TASK, wallclock, 0);
+#ifdef CONFIG_SCHED_WALT
+	sugov_check_freq_update(cpu);
+#endif
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 	rq->clock_update_flags = 0;
@@ -5689,6 +5734,9 @@ static void migrate_tasks(struct rq *dead_rq)
 		if (rq != dead_rq) {
 			raw_spin_unlock(&rq->lock);
 			rq = dead_rq;
+#ifdef CONFIG_SCHED_WALT
+			sugov_check_freq_update(dest_cpu);
+#endif
 			raw_spin_lock(&rq->lock);
 		}
 		raw_spin_unlock(&next->pi_lock);
@@ -7639,6 +7687,7 @@ void __init sched_init_smp(void)
 	alloc_cpumask_var(&fallback_doms, GFP_KERNEL);
 
 	sched_init_numa();
+	update_cluster_topology();
 
 	/*
 	 * There's no userspace yet to cause hotplug operations; hence all the
@@ -7719,6 +7768,8 @@ void __init sched_init(void)
 
 	for (i = 0; i < WAIT_TABLE_SIZE; i++)
 		init_waitqueue_head(bit_wait_table + i);
+
+	init_clusters();
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);
@@ -7838,7 +7889,17 @@ void __init sched_init(void)
 		rq->idle_stamp = 0;
 		rq->avg_idle = 2*sysctl_sched_migration_cost;
 		rq->max_idle_balance_cost = sysctl_sched_migration_cost;
+
+		/*
+		 * All cpus part of same cluster by default. This avoids the
+		 * need to check for rq->cluster being non-NULL.
+		 */
+		rq->cluster = &init_cluster;
+
 #ifdef CONFIG_SCHED_WALT
+		rq->freq_inc_notify = DEFAULT_FREQ_INC_NOTIFY;
+		rq->freq_dec_notify = DEFAULT_FREQ_DEC_NOTIFY;
+		raw_spin_lock_init(&rq->walt_update_lock);
 		rq->cur_irqload = 0;
 		rq->avg_irqload = 0;
 		rq->irqload_ts = 0;

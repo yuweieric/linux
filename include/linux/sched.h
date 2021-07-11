@@ -1482,6 +1482,8 @@ struct ravg {
 	u64 mark_start;
 	u32 sum, demand;
 	u32 sum_history[RAVG_HIST_SIZE_MAX];
+	u32 curr_window_cpu[NR_CPUS];
+	u32 prev_window_cpu[NR_CPUS];
 	u32 curr_window, prev_window;
 	u16 active_windows;
 };
@@ -3774,6 +3776,8 @@ static inline unsigned long rlimit_max(unsigned int limit)
 #define SCHED_CPUFREQ_DL	(1U << 1)
 #define SCHED_CPUFREQ_IOWAIT	(1U << 2)
 #define SCHED_CPUFREQ_MIGRATION	(1U << 3)
+#define SCHED_CPUFREQ_WALT	(1U << 4)
+#define SCHED_CPUFREQ_INTERCLUSTER_MIGRATION	(1U << 5)
 
 #define SCHED_CPUFREQ_RT_DL	(SCHED_CPUFREQ_RT | SCHED_CPUFREQ_DL)
 

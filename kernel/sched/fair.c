@@ -133,6 +133,145 @@ unsigned int sysctl_sched_cfs_bandwidth_slice = 5000UL;
 unsigned int capacity_margin = 1280; /* ~20% */
 #define fits_capacity(cap, max)	((cap) * capacity_margin < (max) * 1024)
 
+struct list_head cluster_head;
+int num_clusters;
+
+struct sched_cluster init_cluster = {
+	.list			=	LIST_HEAD_INIT(init_cluster.list),
+	.id			=	0,
+	.max_possible_capacity	=	1024,
+	.cur_freq		=	1,
+	.max_freq		=	1,
+	.min_freq		=	1,
+	.capacity_margin	=	1280,
+	.sd_capacity_margin	=	1280,
+};
+
+static void assign_cluster_ids(struct list_head *head)
+{
+	struct sched_cluster *cluster;
+	int pos = 0;
+
+	list_for_each_entry(cluster, head, list) {
+		cluster->id = pos++;
+	}
+}
+
+static void
+move_list(struct list_head *dst, struct list_head *src, bool sync_rcu)
+{
+	struct list_head *first, *last;
+
+	first = src->next;
+	last = src->prev;
+
+	if (sync_rcu) {
+		INIT_LIST_HEAD_RCU(src);
+		synchronize_rcu();
+	}
+
+	first->prev = dst;
+	dst->prev = last;
+	last->next = dst;
+
+	/* Ensure list sanity before making the head visible to all CPUs. */
+	smp_mb();
+	dst->next = first;
+}
+
+static void
+insert_cluster(struct sched_cluster *cluster, struct list_head *head)
+{
+	struct sched_cluster *tmp;
+	struct list_head *iter = head;
+
+	list_for_each_entry(tmp, head, list) {
+		/*
+		 * FIXME:
+		 * Because sched_init is called before cpufreq_init, we
+		 * got wrong max_possible_capacity here in kernel 4.14. We
+		 * should sort clusters later in a cpufreq notify.
+		 * Temporarily use cpu id here.
+		 */
+		// if (cluster->max_possible_capacity < tmp->max_possible_capacity)
+		// 	break;
+		if (cpumask_first(&cluster->cpus) < cpumask_first(&tmp->cpus))
+			break;
+		iter = &tmp->list;
+	}
+
+	list_add(&cluster->list, iter);
+}
+
+static struct sched_cluster *alloc_new_cluster(const struct cpumask *cpus)
+{
+	struct sched_cluster *cluster = NULL;
+
+	cluster = kzalloc(sizeof(struct sched_cluster), GFP_ATOMIC);
+	if (!cluster) {
+		pr_warn("Cluster allocation failed. Possible bad scheduling\n");
+		return NULL;
+	}
+
+	INIT_LIST_HEAD(&cluster->list);
+	cluster->max_possible_capacity	=	arch_scale_cpu_capacity(NULL, cpumask_first(cpus));
+	cluster->cur_freq		=	1;
+	cluster->max_freq		=	1;
+	cluster->min_freq		=	1;
+	cluster->freq_init_done		=	false;
+	cluster->capacity_margin	=	capacity_margin;
+	cluster->sd_capacity_margin	=	capacity_margin;
+
+	cluster->cpus = *cpus;
+
+	return cluster;
+}
+
+static void add_cluster(const struct cpumask *cpus, struct list_head *head)
+{
+	struct sched_cluster *cluster = alloc_new_cluster(cpus);
+	int i;
+
+	if (!cluster)
+		return;
+
+	for_each_cpu(i, cpus)
+		cpu_rq(i)->cluster = cluster;
+
+	insert_cluster(cluster, head);
+	num_clusters++;
+}
+
+void update_cluster_topology(void)
+{
+	struct cpumask cpus = *cpu_possible_mask;
+	const struct cpumask *cluster_cpus;
+	struct list_head new_head;
+	int i;
+
+	INIT_LIST_HEAD(&new_head);
+
+	for_each_cpu(i, &cpus) {
+		cluster_cpus = cpu_coregroup_mask(i);
+		cpumask_andnot(&cpus, &cpus, cluster_cpus);
+		add_cluster(cluster_cpus, &new_head);
+	}
+
+	assign_cluster_ids(&new_head);
+
+	/*
+	 * Ensure cluster ids are visible to all CPUs before making
+	 * cluster_head visible.
+	 */
+	move_list(&cluster_head, &new_head, false);
+}
+
+void init_clusters(void)
+{
+	init_cluster.cpus = *cpu_possible_mask;
+	INIT_LIST_HEAD(&cluster_head);
+}
+
 static inline void update_load_add(struct load_weight *lw, unsigned long inc)
 {
 	lw->weight += inc;
@@ -3547,6 +3686,11 @@ static inline unsigned long _task_util_est(struct task_struct *p)
 
 static inline unsigned long task_util_est(struct task_struct *p)
 {
+#ifdef CONFIG_SCHED_WALT
+	if (likely(!walt_disabled && sysctl_sched_use_walt_task_util))
+		return (p->ravg.demand /
+			(walt_ravg_window >> SCHED_CAPACITY_SHIFT));
+#endif
 	return max(task_util(p), _task_util_est(p));
 }
 
@@ -5052,7 +5196,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 * passed.
 	 */
 	if (p->in_iowait)
-		cpufreq_update_util(rq, SCHED_CPUFREQ_IOWAIT);
+		cpufreq_update_util(rq, SCHED_CPUFREQ_IOWAIT | SCHED_CPUFREQ_WALT);
 
 	for_each_sched_entity(se) {
 		if (se->on_rq)
@@ -9807,8 +9951,14 @@ more_balance:
 			/* We've kicked active balancing, force task migration. */
 			sd->nr_balance_failed = sd->cache_nice_tries+1;
 		}
-	} else
+	} else {
 		sd->nr_balance_failed = 0;
+#ifdef CONFIG_SCHED_WALT
+		/* Assumes one 'busiest' cpu that we pulled tasks from */
+		sugov_check_freq_update(this_cpu);
+		sugov_check_freq_update(cpu_of(busiest));
+#endif
+	}
 
 	if (likely(!active_balance)) {
 		/* We were unbalanced, so reset the balancing interval */
@@ -10011,6 +10161,7 @@ static int active_load_balance_cpu_stop(void *data)
 		.src_rq		= busiest_rq,
 		.idle		= CPU_IDLE,
 	};
+	bool moved = false;
 
 	raw_spin_lock_irq(&busiest_rq->lock);
 
@@ -10037,6 +10188,7 @@ static int active_load_balance_cpu_stop(void *data)
 					cpu_online(target_cpu)) {
 			detach_task(push_task, &env);
 			push_task_detached = 1;
+			moved = true;
 		}
 		goto out_unlock;
 	}
@@ -10059,6 +10211,7 @@ static int active_load_balance_cpu_stop(void *data)
 			schedstat_inc(sd->alb_pushed);
 			/* Active balancing done, reset the failure counter. */
 			sd->nr_balance_failed = 0;
+			moved = true;
 		} else {
 			schedstat_inc(sd->alb_failed);
 		}
@@ -10082,6 +10235,13 @@ out_unlock:
 		attach_one_task(target_rq, p);
 
 	local_irq_enable();
+
+#ifdef CONFIG_SCHED_WALT
+	if (moved) {
+		sugov_check_freq_update(target_cpu);
+		sugov_check_freq_update(busiest_cpu);
+	}
+#endif
 
 	return 0;
 }

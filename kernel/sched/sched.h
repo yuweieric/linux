@@ -15,6 +15,7 @@
 #include "cpupri.h"
 #include "cpudeadline.h"
 #include "cpuacct.h"
+#include "walt.h"
 
 #ifdef CONFIG_SCHED_DEBUG
 #define SCHED_WARN_ON(x)	WARN_ONCE(x, #x)
@@ -387,6 +388,11 @@ struct cfs_bandwidth { };
 
 #endif	/* CONFIG_CGROUP_SCHED */
 
+#ifdef CONFIG_SCHED_WALT
+#define DEFAULT_FREQ_INC_NOTIFY (200 * 1000)
+#define DEFAULT_FREQ_DEC_NOTIFY (200 * 1000)
+#endif
+
 /* CFS-related fields in a runqueue */
 struct cfs_rq {
 	struct load_weight load;
@@ -682,6 +688,28 @@ extern void rto_push_irq_work_func(struct irq_work *work);
 #endif
 #endif /* CONFIG_SMP */
 
+struct sched_cluster {
+	struct list_head list;
+	struct cpumask cpus;
+	int id;
+	int max_possible_capacity;
+	unsigned int cur_freq, max_freq, min_freq;
+	bool freq_init_done;
+	unsigned int capacity_margin;
+	unsigned int sd_capacity_margin;
+};
+
+extern struct sched_cluster init_cluster;
+extern void update_cluster_topology(void);
+extern void init_clusters(void);
+
+/* Iterate in increasing order of cluster max possible capacity */
+#define for_each_sched_cluster(cluster) \
+	list_for_each_entry(cluster, &cluster_head, list)
+
+#define for_each_sched_cluster_reverse(cluster) \
+	list_for_each_entry_reverse(cluster, &cluster_head, list)
+
 /*
  * This is the main, per-CPU runqueue data structure.
  *
@@ -788,6 +816,7 @@ struct rq {
 	u64 max_idle_balance_cost;
 #endif
 
+	struct sched_cluster *cluster;
 #ifdef CONFIG_SCHED_WALT
 	u64 cumulative_runnable_avg;
 	u64 window_start;
@@ -799,6 +828,10 @@ struct rq {
 	u64 avg_irqload;
 	u64 irqload_ts;
 	u64 cum_window_demand;
+	raw_spinlock_t walt_update_lock;
+
+	unsigned int freq_inc_notify;
+	unsigned int freq_dec_notify;
 #endif /* CONFIG_SCHED_WALT */
 
 
@@ -1462,6 +1495,11 @@ struct sched_class {
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_change_group) (struct task_struct *p, int type);
+#endif
+#ifdef CONFIG_SCHED_WALT
+	void (*fixup_cumulative_runnable_avg)(struct rq *rq,
+					      struct task_struct *task,
+					      u64 new_task_load);
 #endif
 };
 
@@ -2135,6 +2173,15 @@ static inline u64 irq_time_read(int cpu)
 }
 #endif /* CONFIG_IRQ_TIME_ACCOUNTING */
 
+static inline bool use_pelt(void)
+{
+#ifdef CONFIG_SCHED_WALT
+	return (!sysctl_sched_use_walt_cpu_util || walt_disabled);
+#else
+	return true;
+#endif
+}
+
 #ifdef CONFIG_CPU_FREQ
 DECLARE_PER_CPU(struct update_util_data *, cpufreq_update_util_data);
 
@@ -2163,10 +2210,25 @@ DECLARE_PER_CPU(struct update_util_data *, cpufreq_update_util_data);
 static inline void cpufreq_update_util(struct rq *rq, unsigned int flags)
 {
 	struct update_util_data *data;
+#ifdef CONFIG_SCHED_WALT
+	u64 clock = use_pelt() ? rq_clock(rq) : walt_ktime_clock();
+
+	if (use_pelt()) {
+		clock = rq_clock(rq);
+		if (flags == SCHED_CPUFREQ_WALT)
+			return;
+	} else {
+		clock = walt_ktime_clock();
+		if (!(flags & SCHED_CPUFREQ_WALT))
+			return;
+	}
+#else
+	u64 clock = rq_clock(rq);
+#endif
 
 	data = rcu_dereference_sched(*this_cpu_ptr(&cpufreq_update_util_data));
 	if (data)
-		data->func(data, rq_clock(rq), flags);
+		data->func(data, clock, flags);
 }
 
 static inline void cpufreq_update_this_cpu(struct rq *rq, unsigned int flags)
@@ -2188,6 +2250,11 @@ walt_task_in_cum_window_demand(struct rq *rq, struct task_struct *p)
 	       (p->on_rq || p->last_sleep_ts >= rq->window_start);
 }
 
+extern void sugov_mark_util_change(int cpu, unsigned int flags);
+extern void sugov_check_freq_update(int cpu);
+#else
+static inline void sugov_mark_util_change(int cpu, unsigned int flags) {}
+static inline void sugov_check_freq_update(int cpu) {}
 #endif /* CONFIG_SCHED_WALT */
 
 #ifdef arch_scale_freq_capacity
@@ -2197,6 +2264,51 @@ walt_task_in_cum_window_demand(struct rq *rq, struct task_struct *p)
 #else /* arch_scale_freq_capacity */
 #define arch_scale_freq_invariant()	(false)
 #endif
+
+/* bits in struct sugov_cpu flags field */
+enum {
+	WALT_WINDOW_ROLLOVER            = (1 << 0),  /* 1 */
+	INTER_CLUSTER_MIGRATION_SRC     = (1 << 1),  /* 2 */
+	INTER_CLUSTER_MIGRATION_DST     = (1 << 2),  /* 4 */
+	ADD_TOP_TASK                    = (1 << 3),  /* 8 */
+	ADD_ED_TASK                     = (1 << 4),  /* 16 */
+	CLEAR_ED_TASK                   = (1 << 5),  /* 32 */
+	POLICY_MIN_RESTORE              = (1 << 6),  /* 64 */
+	FORCE_UPDATE                    = (1 << 7),  /* 128 */
+	PRED_LOAD_CHANGE                = (1 << 8),  /* 256 */
+	PRED_LOAD_WINDOW_ROLLOVER       = (1 << 9),  /* 512 */
+	PRED_LOAD_ENQUEUE               = (1 << 10), /* 1024 */
+	SET_MIN_UTIL                    = (1 << 11), /* 2048 */
+	ENQUEUE_MIN_UTIL                = (1 << 12), /* 4096 */
+	FRAME_UPDATE                    = (1 << 13), /* 8192 */
+};
+
+extern unsigned long boosted_cpu_util(int cpu);
+
+static inline unsigned int freq_to_util(unsigned int cpu, unsigned int freq)
+{
+	return arch_scale_cpu_capacity(NULL, cpu) *
+		(unsigned long)freq / cpu_rq(cpu)->cluster->max_freq;
+}
+
+/*
+ * Note that util_to_freq(i, freq_to_util(i, *freq*)) is lower than *freq*.
+ * That's ok since we use CPUFREQ_RELATION_L in __cpufreq_driver_target().
+ */
+static inline unsigned int util_to_freq(unsigned int cpu, unsigned int util)
+{
+	return cpu_rq(cpu)->cluster->max_freq *
+		(unsigned long)util / arch_scale_cpu_capacity(NULL, cpu);
+}
+
+/* Is frequency of two cpus synchronized with each other? */
+static inline bool same_freq_domain(int src_cpu, int dst_cpu)
+{
+	if (src_cpu == dst_cpu)
+		return true;
+
+	return (cpu_rq(src_cpu)->cluster == cpu_rq(dst_cpu)->cluster);
+}
 
 /**
  * enum schedutil_type - CPU utilization type
