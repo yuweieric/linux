@@ -424,6 +424,9 @@ void sugov_mark_util_change(int cpu, unsigned int flags)
 	struct sugov_cpu *sg_cpu = &per_cpu(sugov_cpu, cpu);
 	struct sugov_policy *sg_policy;
 
+	if (use_pelt())
+		return;
+
 	if (!sg_cpu->enabled)
 		return;
 
@@ -442,6 +445,9 @@ void sugov_check_freq_update(int cpu)
 {
 	struct sugov_cpu *sg_cpu;
 	struct sugov_policy *sg_policy;
+
+	if (use_pelt())
+		return;
 
 	if (cpu >= nr_cpu_ids)
 		return;
